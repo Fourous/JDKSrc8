@@ -34,157 +34,55 @@ import java.util.function.Consumer;
 
 
 /**
- * Hash table based implementation of the <tt>Map</tt> interface, with
- * <em>weak keys</em>.
- * An entry in a <tt>WeakHashMap</tt> will automatically be removed when
- * its key is no longer in ordinary use.  More precisely, the presence of a
- * mapping for a given key will not prevent the key from being discarded by the
- * garbage collector, that is, made finalizable, finalized, and then reclaimed.
- * When a key has been discarded its entry is effectively removed from the map,
- * so this class behaves somewhat differently from other <tt>Map</tt>
- * implementations.
- *
- * <p> Both null values and the null key are supported. This class has
- * performance characteristics similar to those of the <tt>HashMap</tt>
- * class, and has the same efficiency parameters of <em>initial capacity</em>
- * and <em>load factor</em>.
- *
- * <p> Like most collection classes, this class is not synchronized.
- * A synchronized <tt>WeakHashMap</tt> may be constructed using the
- * {@link Collections#synchronizedMap Collections.synchronizedMap}
- * method.
- *
- * <p> This class is intended primarily for use with key objects whose
- * <tt>equals</tt> methods test for object identity using the
- * <tt>==</tt> operator.  Once such a key is discarded it can never be
- * recreated, so it is impossible to do a lookup of that key in a
- * <tt>WeakHashMap</tt> at some later time and be surprised that its entry
- * has been removed.  This class will work perfectly well with key objects
- * whose <tt>equals</tt> methods are not based upon object identity, such
- * as <tt>String</tt> instances.  With such recreatable key objects,
- * however, the automatic removal of <tt>WeakHashMap</tt> entries whose
- * keys have been discarded may prove to be confusing.
- *
- * <p> The behavior of the <tt>WeakHashMap</tt> class depends in part upon
- * the actions of the garbage collector, so several familiar (though not
- * required) <tt>Map</tt> invariants do not hold for this class.  Because
- * the garbage collector may discard keys at any time, a
- * <tt>WeakHashMap</tt> may behave as though an unknown thread is silently
- * removing entries.  In particular, even if you synchronize on a
- * <tt>WeakHashMap</tt> instance and invoke none of its mutator methods, it
- * is possible for the <tt>size</tt> method to return smaller values over
- * time, for the <tt>isEmpty</tt> method to return <tt>false</tt> and
- * then <tt>true</tt>, for the <tt>containsKey</tt> method to return
- * <tt>true</tt> and later <tt>false</tt> for a given key, for the
- * <tt>get</tt> method to return a value for a given key but later return
- * <tt>null</tt>, for the <tt>put</tt> method to return
- * <tt>null</tt> and the <tt>remove</tt> method to return
- * <tt>false</tt> for a key that previously appeared to be in the map, and
- * for successive examinations of the key set, the value collection, and
- * the entry set to yield successively smaller numbers of elements.
- *
- * <p> Each key object in a <tt>WeakHashMap</tt> is stored indirectly as
- * the referent of a weak reference.  Therefore a key will automatically be
- * removed only after the weak references to it, both inside and outside of the
- * map, have been cleared by the garbage collector.
- *
- * <p> <strong>Implementation note:</strong> The value objects in a
- * <tt>WeakHashMap</tt> are held by ordinary strong references.  Thus care
- * should be taken to ensure that value objects do not strongly refer to their
- * own keys, either directly or indirectly, since that will prevent the keys
- * from being discarded.  Note that a value object may refer indirectly to its
- * key via the <tt>WeakHashMap</tt> itself; that is, a value object may
- * strongly refer to some other key object whose associated value object, in
- * turn, strongly refers to the key of the first value object.  If the values
- * in the map do not rely on the map holding strong references to them, one way
- * to deal with this is to wrap values themselves within
- * <tt>WeakReferences</tt> before
- * inserting, as in: <tt>m.put(key, new WeakReference(value))</tt>,
- * and then unwrapping upon each <tt>get</tt>.
- *
- * <p>The iterators returned by the <tt>iterator</tt> method of the collections
- * returned by all of this class's "collection view methods" are
- * <i>fail-fast</i>: if the map is structurally modified at any time after the
- * iterator is created, in any way except through the iterator's own
- * <tt>remove</tt> method, the iterator will throw a {@link
- * ConcurrentModificationException}.  Thus, in the face of concurrent
- * modification, the iterator fails quickly and cleanly, rather than risking
- * arbitrary, non-deterministic behavior at an undetermined time in the future.
- *
- * <p>Note that the fail-fast behavior of an iterator cannot be guaranteed
- * as it is, generally speaking, impossible to make any hard guarantees in the
- * presence of unsynchronized concurrent modification.  Fail-fast iterators
- * throw <tt>ConcurrentModificationException</tt> on a best-effort basis.
- * Therefore, it would be wrong to write a program that depended on this
- * exception for its correctness:  <i>the fail-fast behavior of iterators
- * should be used only to detect bugs.</i>
- *
- * <p>This class is a member of the
- * <a href="{@docRoot}/../technotes/guides/collections/index.html">
- * Java Collections Framework</a>.
- *
- * @param <K> the type of keys maintained by this map
- * @param <V> the type of mapped values
- *
- * @author      Doug Lea
- * @author      Josh Bloch
- * @author      Mark Reinhold
- * @since       1.2
- * @see         java.util.HashMap
- * @see         java.lang.ref.WeakReference
+ * 继承关系可以看到，WeakHashMap是跟HashMap没有关系的，其次，他是不支持克隆，序列化操作的
+ * 并且由于一般来做缓存和弱引用的原理，其存储一般不会存大量数据，所以只有数组+链表的存储结构
+ * @param <K>
+ * @param <V>
  */
-public class WeakHashMap<K,V>
-    extends AbstractMap<K,V>
-    implements Map<K,V> {
+public class WeakHashMap<K,V> extends AbstractMap<K,V> implements Map<K,V> {
 
     /**
-     * The default initial capacity -- MUST be a power of two.
+     * 默认初始容量为16，容量达到64进行树化
      */
     private static final int DEFAULT_INITIAL_CAPACITY = 16;
 
     /**
-     * The maximum capacity, used if a higher value is implicitly specified
-     * by either of the constructors with arguments.
-     * MUST be a power of two <= 1<<30.
+     * 最大容量为2的30次方
      */
     private static final int MAXIMUM_CAPACITY = 1 << 30;
 
     /**
-     * The load factor used when none specified in constructor.
+     * 默认装载因子为0.75f 跟HashMap一样
      */
     private static final float DEFAULT_LOAD_FACTOR = 0.75f;
 
     /**
-     * The table, resized as necessary. Length MUST Always be a power of two.
+     * 桶
      */
     Entry<K,V>[] table;
 
     /**
-     * The number of key-value mappings contained in this weak hash map.
+     * 元素个数
      */
     private int size;
 
     /**
-     * The next size value at which to resize (capacity * load factor).
+     * 扩容门槛 (capacity * load factor).
      */
     private int threshold;
 
     /**
-     * The load factor for the hash table.
+     * 装载因子
      */
     private final float loadFactor;
 
     /**
-     * Reference queue for cleared WeakEntries
+     * 引用队列，当弱键失效的时候会把Entry添加到这个队列中，下次访问map会将失效的entry清理掉
      */
     private final ReferenceQueue<Object> queue = new ReferenceQueue<>();
 
     /**
-     * The number of times this WeakHashMap has been structurally modified.
-     * Structural modifications are those that change the number of
-     * mappings in the map or otherwise modify its internal structure
-     * (e.g., rehash).  This field is used to make iterators on
-     * Collection-views of the map fail-fast.
+     * 修改次数，快速失败
      *
      * @see ConcurrentModificationException
      */
@@ -305,26 +203,33 @@ public class WeakHashMap<K,V>
     }
 
     /**
-     * Returns index for hash code h.
+     * 基本HashMap类似，用 h & (length-1)定位元素
      */
     private static int indexFor(int h, int length) {
         return h & (length-1);
     }
 
     /**
-     * Expunges stale entries from the table.
+     * 剔除失效的Entry
+     * 当key失效的时候gc会自动把对应的Entry添加到这个引用队列中；
+     * 所有对map的操作都会直接或间接地调用到这个方法先移除失效的Entry，比如getTable()、size()、resize()；
+     * 这个方法的目的就是遍历引用队列，并把其中保存的Entry从map中移除掉
+     * 从这里可以看到移除Entry的同时把value也一并置为null帮助gc清理元素，防御性编程
      */
     private void expungeStaleEntries() {
+        // 遍历引用队列
         for (Object x; (x = queue.poll()) != null; ) {
             synchronized (queue) {
                 @SuppressWarnings("unchecked")
-                    Entry<K,V> e = (Entry<K,V>) x;
+                Entry<K,V> e = (Entry<K,V>) x;
                 int i = indexFor(e.hash, table.length);
-
+                // 找到所在的桶
                 Entry<K,V> prev = table[i];
                 Entry<K,V> p = prev;
+                // 遍历链表
                 while (p != null) {
                     Entry<K,V> next = p.next;
+                    // 找到该元素
                     if (p == e) {
                         if (prev == e)
                             table[i] = next;
@@ -360,6 +265,7 @@ public class WeakHashMap<K,V>
     public int size() {
         if (size == 0)
             return 0;
+        // 获取大小时候，先清理一波再返回
         expungeStaleEntries();
         return size;
     }
@@ -397,6 +303,7 @@ public class WeakHashMap<K,V>
         Entry<K,V>[] tab = getTable();
         int index = indexFor(h, tab.length);
         Entry<K,V> e = tab[index];
+        // 遍历链表，没有就返回空
         while (e != null) {
             if (e.hash == h && eq(k, e.get()))
                 return e.value;
@@ -433,93 +340,96 @@ public class WeakHashMap<K,V>
     }
 
     /**
-     * Associates the specified value with the specified key in this map.
-     * If the map previously contained a mapping for this key, the old
-     * value is replaced.
-     *
-     * @param key key with which the specified value is to be associated.
-     * @param value value to be associated with the specified key.
-     * @return the previous value associated with <tt>key</tt>, or
-     *         <tt>null</tt> if there was no mapping for <tt>key</tt>.
-     *         (A <tt>null</tt> return can also indicate that the map
-     *         previously associated <tt>null</tt> with <tt>key</tt>.)
+     * hash这里与HashMap不同，HashMap直接计算，如果key为空就返回0，而这里采用空值计算
+     * HashMap的hash是一次异或操作，而这里使用了四次，HashMap解释是就算冲突也会转换为红黑树，效率基本没影响
+     * @param key
+     * @param value
+     * @return
      */
     public V put(K key, V value) {
+        // 如果key为空，用空对象代替
         Object k = maskNull(key);
+        // 计算key的hash值
         int h = hash(k);
+        // 获取桶
         Entry<K,V>[] tab = getTable();
+        // 计算元素在哪个桶中，h & (length-1)
         int i = indexFor(h, tab.length);
-
+        // 遍历桶对应的链表
         for (Entry<K,V> e = tab[i]; e != null; e = e.next) {
             if (h == e.hash && eq(k, e.get())) {
+                // 如果找到了元素就使用新值替换旧值，并返回旧值
                 V oldValue = e.value;
                 if (value != oldValue)
                     e.value = value;
                 return oldValue;
             }
         }
-
         modCount++;
+        // 如果没找到就把新值插入到链表的头部
+        // 注意HashMap是将新值插入到尾部
         Entry<K,V> e = tab[i];
         tab[i] = new Entry<>(k, value, queue, h, e);
+        // 如果插入元素后数量达到了扩容门槛就把桶的数量扩容为2倍大小
+        // HashMap是大于，这里是大于等于
         if (++size >= threshold)
             resize(tab.length * 2);
         return null;
     }
 
     /**
-     * Rehashes the contents of this map into a new array with a
-     * larger capacity.  This method is called automatically when the
-     * number of keys in this map reaches its threshold.
+     * 判断旧容量是否达到最大容量
+     * 新建新桶，并将元素转移到新桶里面去
+     * 如果转移后元素个数不到扩容门槛的一半，则把元素再转移回旧桶，继续使用旧桶，说明不需要扩容
+     * 否则使用新桶，并计算新的扩容门槛
+     * 转移元素的过程中会把key为null的元素清除掉，所以size会变小
      *
-     * If current capacity is MAXIMUM_CAPACITY, this method does not
-     * resize the map, but sets threshold to Integer.MAX_VALUE.
-     * This has the effect of preventing future calls.
-     *
-     * @param newCapacity the new capacity, MUST be a power of two;
-     *        must be greater than current capacity unless current
-     *        capacity is MAXIMUM_CAPACITY (in which case value
-     *        is irrelevant).
+     * 这里之所以还转回去是因为转移会判断清除元素，可能变小了就不用专门扩大新桶了
+     * @param newCapacity
      */
     void resize(int newCapacity) {
+        // 获取旧桶，getTable()的时候会剔除失效的Entry
         Entry<K,V>[] oldTable = getTable();
+        // 旧容量
         int oldCapacity = oldTable.length;
         if (oldCapacity == MAXIMUM_CAPACITY) {
             threshold = Integer.MAX_VALUE;
             return;
         }
-
+        // 新桶
         Entry<K,V>[] newTable = newTable(newCapacity);
+        // 把元素从旧桶移到新桶
         transfer(oldTable, newTable);
+        // 把新桶赋值桶变量
         table = newTable;
-
-        /*
-         * If ignoring null elements and processing ref queue caused massive
-         * shrinkage, then restore old table.  This should be rare, but avoids
-         * unbounded expansion of garbage-filled tables.
-         */
+        // 如果元素个数大于扩容门槛的一半，则使用新桶和新容量，并计算新的扩容门槛
         if (size >= threshold / 2) {
             threshold = (int)(newCapacity * loadFactor);
         } else {
+            // 否则把元素再转移回旧桶，还是使用旧桶
+            // 因为在transfer的时候会清除失效的Entry，所以元素个数可能没有那么大了，就不需要扩容了
             expungeStaleEntries();
             transfer(newTable, oldTable);
             table = oldTable;
         }
     }
 
-    /** Transfers all entries from src to dest tables */
     private void transfer(Entry<K,V>[] src, Entry<K,V>[] dest) {
+        // 遍历旧桶
         for (int j = 0; j < src.length; ++j) {
             Entry<K,V> e = src[j];
             src[j] = null;
             while (e != null) {
                 Entry<K,V> next = e.next;
                 Object key = e.get();
+                // 如果key等于了null就清除，说明key被gc清理掉了，则把整个Entry清除
                 if (key == null) {
+                    // 也是直接置null，让GC清楚
                     e.next = null;  // Help GC
                     e.value = null; //  "   "
                     size--;
                 } else {
+                    // 否则就计算在新桶中的位置并把这个元素放在新桶对应链表的头部
                     int i = indexFor(e.hash, dest.length);
                     e.next = dest[i];
                     dest[i] = e;
@@ -593,15 +503,18 @@ public class WeakHashMap<K,V>
         int i = indexFor(h, tab.length);
         Entry<K,V> prev = tab[i];
         Entry<K,V> e = prev;
-
+        // 遍历链表
         while (e != null) {
             Entry<K,V> next = e.next;
             if (h == e.hash && eq(k, e.get())) {
+                // 找到了就删除元素
                 modCount++;
                 size--;
                 if (prev == e)
+                    // 如果是头节点，指向下个节点
                     tab[i] = next;
                 else
+                    // 如果不是头节点，删除该节点
                     prev.next = next;
                 return e.value;
             }
@@ -696,20 +609,20 @@ public class WeakHashMap<K,V>
     }
 
     /**
-     * The entries in this hash table extend WeakReference, using its main ref
-     * field as the key.
+     * 内部的存储节点，可以看到是没有Key属性的
      */
     private static class Entry<K,V> extends WeakReference<Object> implements Map.Entry<K,V> {
+        // 没有Key属性的，key是作为弱引用存到Reference类中
         V value;
         final int hash;
         Entry<K,V> next;
 
         /**
-         * Creates new entry.
+         * 从Entry的构造方法可以看到，key和queue最终会传到到Reference的构造方法中
+         * 这里的key就是Reference的referent属性，它会被gc特殊对待，即当没有强引用存在时，当下一次gc的时候会被清除
          */
-        Entry(Object key, V value,
-              ReferenceQueue<Object> queue,
-              int hash, Entry<K,V> next) {
+        Entry(Object key, V value, ReferenceQueue<Object> queue, int hash, Entry<K,V> next) {
+            // 调用WeakReference的构造方法初始化key和引用队列
             super(key, queue);
             this.value = value;
             this.hash  = hash;

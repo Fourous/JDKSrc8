@@ -31,154 +31,59 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 /**
- * A Red-Black tree based {@link NavigableMap} implementation.
- * The map is sorted according to the {@linkplain Comparable natural
- * ordering} of its keys, or by a {@link Comparator} provided at map
- * creation time, depending on which constructor is used.
+ * TreeMap使用红黑树存储元素，可以保证元素按key值的大小进行遍历
+ * TreeMap实现了Map、SortedMap、NavigableMap、Cloneable、Serializable等接口
+ *  红黑树特性：
+ * （1）每个节点或者是黑色，或者是红色。
+ * （2）根节点是黑色。
+ * （3）每个叶子节点（NIL）是黑色。（注意：这里叶子节点，是指为空(NIL或NULL)的叶子节点！）
+ * （4）如果一个节点是红色的，则它的子节点必须是黑色的。
+ * （5）从一个节点到该节点的子孙节点的所有路径上包含相同数目的黑节点
  *
- * <p>This implementation provides guaranteed log(n) time cost for the
- * {@code containsKey}, {@code get}, {@code put} and {@code remove}
- * operations.  Algorithms are adaptations of those in Cormen, Leiserson, and
- * Rivest's <em>Introduction to Algorithms</em>.
+ * TreeMap实现了红黑树的插入删除平衡等必要算法
+ * 左旋：rotateLeft
+ * 右旋：rotateRight
+ * 插入平衡：fixAfterInsertion
  *
- * <p>Note that the ordering maintained by a tree map, like any sorted map, and
- * whether or not an explicit comparator is provided, must be <em>consistent
- * with {@code equals}</em> if this sorted map is to correctly implement the
- * {@code Map} interface.  (See {@code Comparable} or {@code Comparator} for a
- * precise definition of <em>consistent with equals</em>.)  This is so because
- * the {@code Map} interface is defined in terms of the {@code equals}
- * operation, but a sorted map performs all key comparisons using its {@code
- * compareTo} (or {@code compare}) method, so two keys that are deemed equal by
- * this method are, from the standpoint of the sorted map, equal.  The behavior
- * of a sorted map <em>is</em> well-defined even if its ordering is
- * inconsistent with {@code equals}; it just fails to obey the general contract
- * of the {@code Map} interface.
- *
- * <p><strong>Note that this implementation is not synchronized.</strong>
- * If multiple threads access a map concurrently, and at least one of the
- * threads modifies the map structurally, it <em>must</em> be synchronized
- * externally.  (A structural modification is any operation that adds or
- * deletes one or more mappings; merely changing the value associated
- * with an existing key is not a structural modification.)  This is
- * typically accomplished by synchronizing on some object that naturally
- * encapsulates the map.
- * If no such object exists, the map should be "wrapped" using the
- * {@link Collections#synchronizedSortedMap Collections.synchronizedSortedMap}
- * method.  This is best done at creation time, to prevent accidental
- * unsynchronized access to the map: <pre>
- *   SortedMap m = Collections.synchronizedSortedMap(new TreeMap(...));</pre>
- *
- * <p>The iterators returned by the {@code iterator} method of the collections
- * returned by all of this class's "collection view methods" are
- * <em>fail-fast</em>: if the map is structurally modified at any time after
- * the iterator is created, in any way except through the iterator's own
- * {@code remove} method, the iterator will throw a {@link
- * ConcurrentModificationException}.  Thus, in the face of concurrent
- * modification, the iterator fails quickly and cleanly, rather than risking
- * arbitrary, non-deterministic behavior at an undetermined time in the future.
- *
- * <p>Note that the fail-fast behavior of an iterator cannot be guaranteed
- * as it is, generally speaking, impossible to make any hard guarantees in the
- * presence of unsynchronized concurrent modification.  Fail-fast iterators
- * throw {@code ConcurrentModificationException} on a best-effort basis.
- * Therefore, it would be wrong to write a program that depended on this
- * exception for its correctness:   <em>the fail-fast behavior of iterators
- * should be used only to detect bugs.</em>
- *
- * <p>All {@code Map.Entry} pairs returned by methods in this class
- * and its views represent snapshots of mappings at the time they were
- * produced. They do <strong>not</strong> support the {@code Entry.setValue}
- * method. (Note however that it is possible to change mappings in the
- * associated map using {@code put}.)
- *
- * <p>This class is a member of the
- * <a href="{@docRoot}/../technotes/guides/collections/index.html">
- * Java Collections Framework</a>.
- *
- * @param <K> the type of keys maintained by this map
- * @param <V> the type of mapped values
- *
- * @author  Josh Bloch and Doug Lea
- * @see Map
- * @see HashMap
- * @see Hashtable
- * @see Comparable
- * @see Comparator
- * @see Collection
- * @since 1.2
  */
-
-public class TreeMap<K,V>
-    extends AbstractMap<K,V>
-    implements NavigableMap<K,V>, Cloneable, java.io.Serializable
-{
+public class TreeMap<K,V> extends AbstractMap<K,V> implements NavigableMap<K,V>, Cloneable, java.io.Serializable {
     /**
-     * The comparator used to maintain order in this tree map, or
-     * null if it uses the natural ordering of its keys.
-     *
-     * @serial
+     * 比较器，如果没传则key要实现Comparable接口
+     * 按key的大小排序有两种方式，一种是key实现Comparable接口，一种方式通过构造方法传入比较器
      */
     private final Comparator<? super K> comparator;
 
+    /**
+     * 根节点，TreeMap没有桶的概念，所有的元素都存储在一颗树中
+     */
     private transient Entry<K,V> root;
 
     /**
-     * The number of entries in the tree
+     * 元素个数
      */
     private transient int size = 0;
 
     /**
-     * The number of structural modifications to the tree.
+     * 修改次数
      */
     private transient int modCount = 0;
 
     /**
-     * Constructs a new, empty tree map, using the natural ordering of its
-     * keys.  All keys inserted into the map must implement the {@link
-     * Comparable} interface.  Furthermore, all such keys must be
-     * <em>mutually comparable</em>: {@code k1.compareTo(k2)} must not throw
-     * a {@code ClassCastException} for any keys {@code k1} and
-     * {@code k2} in the map.  If the user attempts to put a key into the
-     * map that violates this constraint (for example, the user attempts to
-     * put a string key into a map whose keys are integers), the
-     * {@code put(Object key, Object value)} call will throw a
-     * {@code ClassCastException}.
+     * 默认构造方法，key必须实现Comparable接口
      */
     public TreeMap() {
         comparator = null;
     }
 
     /**
-     * Constructs a new, empty tree map, ordered according to the given
-     * comparator.  All keys inserted into the map must be <em>mutually
-     * comparable</em> by the given comparator: {@code comparator.compare(k1,
-     * k2)} must not throw a {@code ClassCastException} for any keys
-     * {@code k1} and {@code k2} in the map.  If the user attempts to put
-     * a key into the map that violates this constraint, the {@code put(Object
-     * key, Object value)} call will throw a
-     * {@code ClassCastException}.
-     *
-     * @param comparator the comparator that will be used to order this map.
-     *        If {@code null}, the {@linkplain Comparable natural
-     *        ordering} of the keys will be used.
+     * 使用传入的comparator比较两个key的大小
      */
     public TreeMap(Comparator<? super K> comparator) {
         this.comparator = comparator;
     }
 
     /**
-     * Constructs a new tree map containing the same mappings as the given
-     * map, ordered according to the <em>natural ordering</em> of its keys.
-     * All keys inserted into the new map must implement the {@link
-     * Comparable} interface.  Furthermore, all such keys must be
-     * <em>mutually comparable</em>: {@code k1.compareTo(k2)} must not throw
-     * a {@code ClassCastException} for any keys {@code k1} and
-     * {@code k2} in the map.  This method runs in n*log(n) time.
-     *
-     * @param  m the map whose mappings are to be placed in this map
-     * @throws ClassCastException if the keys in m are not {@link Comparable},
-     *         or are not mutually comparable
-     * @throws NullPointerException if the specified map is null
+     * key必须实现Comparable接口，把传入map中的所有元素保存到新的TreeMap中
      */
     public TreeMap(Map<? extends K, ? extends V> m) {
         comparator = null;
@@ -186,13 +91,7 @@ public class TreeMap<K,V>
     }
 
     /**
-     * Constructs a new tree map containing the same mappings and
-     * using the same ordering as the specified sorted map.  This
-     * method runs in linear time.
-     *
-     * @param  m the sorted map whose mappings are to be placed in this map,
-     *         and whose comparator is to be used to sort this map
-     * @throws NullPointerException if the specified map is null
+     * 使用传入map的比较器，并把传入map中的所有元素保存到新的TreeMap中
      */
     public TreeMap(SortedMap<K, ? extends V> m) {
         comparator = m.comparator();
@@ -201,6 +100,12 @@ public class TreeMap<K,V>
         } catch (java.io.IOException cannotHappen) {
         } catch (ClassNotFoundException cannotHappen) {
         }
+    }
+
+    // 上面两个构造方法可以合并为一种，就是当传入构造器为空时候，给comparator赋值
+    public TreeMap(Map<? extends K, ? extends V> m, boolean isCom) {
+        comparator = (k1, k2) -> ((Comparable<? super K>)k1).compareTo(k2);
+        putAll(m);
     }
 
 
@@ -276,6 +181,7 @@ public class TreeMap<K,V>
      */
     public V get(Object key) {
         Entry<K,V> p = getEntry(key);
+        // 找到了返回值否则返回null
         return (p==null ? null : p.value);
     }
 
@@ -328,30 +234,24 @@ public class TreeMap<K,V>
     }
 
     /**
-     * Returns this map's entry for the given key, or {@code null} if the map
-     * does not contain an entry for the key.
-     *
-     * @return this map's entry for the given key, or {@code null} if the map
-     *         does not contain an entry for the key
-     * @throws ClassCastException if the specified key cannot be compared
-     *         with the keys currently in the map
-     * @throws NullPointerException if the specified key is null
-     *         and this map uses natural ordering, or its comparator
-     *         does not permit null keys
+     * 二叉查找树
      */
     final Entry<K,V> getEntry(Object key) {
-        // Offload comparator-based version for sake of performance
-        if (comparator != null)
-            return getEntryUsingComparator(key);
-        if (key == null)
-            throw new NullPointerException();
+        // comparator 不为空，使用comparator的版本获取元素
+        if (comparator != null) return getEntryUsingComparator(key);
+        // key为null抛异常
+        if (key == null) throw new NullPointerException();
+        // 将key强转为Comparable
         @SuppressWarnings("unchecked")
-            Comparable<? super K> k = (Comparable<? super K>) key;
+        Comparable<? super K> k = (Comparable<? super K>) key;
+        // 从根元素开始遍历
         Entry<K,V> p = root;
         while (p != null) {
             int cmp = k.compareTo(p.key);
+            // 小于0左子树
             if (cmp < 0)
                 p = p.left;
+            // 大于0右子树
             else if (cmp > 0)
                 p = p.right;
             else
@@ -361,21 +261,21 @@ public class TreeMap<K,V>
     }
 
     /**
-     * Version of getEntry using comparator. Split off from getEntry
-     * for performance. (This is not worth doing for most methods,
-     * that are less dependent on comparator performance, but is
-     * worthwhile here.)
+     * 使用传进来的comparator进行查找
      */
     final Entry<K,V> getEntryUsingComparator(Object key) {
         @SuppressWarnings("unchecked")
-            K k = (K) key;
+        K k = (K) key;
         Comparator<? super K> cpr = comparator;
         if (cpr != null) {
+            // 根元素遍历
             Entry<K,V> p = root;
             while (p != null) {
                 int cmp = cpr.compare(k, p.key);
+                // 如果小于0从左子树查找
                 if (cmp < 0)
                     p = p.left;
+                // 如果大于0从右子树查找
                 else if (cmp > 0)
                     p = p.right;
                 else
@@ -515,54 +415,49 @@ public class TreeMap<K,V>
     }
 
     /**
-     * Associates the specified value with the specified key in this map.
-     * If the map previously contained a mapping for the key, the old
-     * value is replaced.
-     *
-     * @param key key with which the specified value is to be associated
-     * @param value value to be associated with the specified key
-     *
-     * @return the previous value associated with {@code key}, or
-     *         {@code null} if there was no mapping for {@code key}.
-     *         (A {@code null} return can also indicate that the map
-     *         previously associated {@code null} with {@code key}.)
-     * @throws ClassCastException if the specified key cannot be compared
-     *         with the keys currently in the map
-     * @throws NullPointerException if the specified key is null
-     *         and this map uses natural ordering, or its comparator
-     *         does not permit null keys
+     * TreeMap的数据插入过程
+     * 插入元素，如果元素在树中存在，则替换value；如果元素不存在，则插入到对应的位置，再平衡树
      */
     public V put(K key, V value) {
         Entry<K,V> t = root;
+        // 如果没有根节点，则直接插入根节点返回null
         if (t == null) {
             compare(key, key); // type (and possibly null) check
-
             root = new Entry<>(key, value, null);
             size = 1;
             modCount++;
             return null;
         }
+        // key比较的结果
         int cmp;
+        // 用来寻找待插入节点的父节点
         Entry<K,V> parent;
-        // split comparator and comparable paths
+        // 根据是否有comparator使用不同的分支
         Comparator<? super K> cpr = comparator;
         if (cpr != null) {
+            // 如果使用的是comparator方式，key值可以为null，只要在comparator.compare()中允许即可
+            // 从根节点开始遍历寻找
             do {
                 parent = t;
                 cmp = cpr.compare(key, t.key);
+                // 小于0则左子树
                 if (cmp < 0)
                     t = t.left;
+                // 大于0则右子树
                 else if (cmp > 0)
                     t = t.right;
                 else
+                    // 如果等于0，说明插入的节点已经存在了，直接更换其value值并返回旧值
                     return t.setValue(value);
             } while (t != null);
         }
         else {
-            if (key == null)
-                throw new NullPointerException();
+            // 如果使用的是Comparable方式，key不能为null
+            if (key == null) throw new NullPointerException();
+            // 强转
             @SuppressWarnings("unchecked")
-                Comparable<? super K> k = (Comparable<? super K>) key;
+            Comparable<? super K> k = (Comparable<? super K>) key;
+            // 从根节点开始遍历寻找 -- 下面基本跟上面一样，只是比较器换了
             do {
                 parent = t;
                 cmp = k.compareTo(t.key);
@@ -574,11 +469,15 @@ public class TreeMap<K,V>
                     return t.setValue(value);
             } while (t != null);
         }
+        // 如果没找到，那么新建一个节点，并插入到树中
         Entry<K,V> e = new Entry<>(key, value, parent);
         if (cmp < 0)
+            // 如果小于0插入到左子节点
             parent.left = e;
         else
+            // 如果大于0插入到右子节点
             parent.right = e;
+        // 插入之后的平衡
         fixAfterInsertion(e);
         size++;
         modCount++;
@@ -586,26 +485,14 @@ public class TreeMap<K,V>
     }
 
     /**
-     * Removes the mapping for this key from this TreeMap if present.
-     *
-     * @param  key key for which mapping should be removed
-     * @return the previous value associated with {@code key}, or
-     *         {@code null} if there was no mapping for {@code key}.
-     *         (A {@code null} return can also indicate that the map
-     *         previously associated {@code null} with {@code key}.)
-     * @throws ClassCastException if the specified key cannot be compared
-     *         with the keys currently in the map
-     * @throws NullPointerException if the specified key is null
-     *         and this map uses natural ordering, or its comparator
-     *         does not permit null keys
+     * 删除元素就是利用二叉树的删除规则
      */
     public V remove(Object key) {
         Entry<K,V> p = getEntry(key);
-        if (p == null)
-            return null;
-
+        if (p == null) return null;
         V oldValue = p.value;
         deleteEntry(p);
+        // 如果删除就返回旧元素
         return oldValue;
     }
 
@@ -2046,10 +1933,8 @@ public class TreeMap<K,V>
     private static final boolean BLACK = true;
 
     /**
-     * Node in the Tree.  Doubles as a means to pass key-value pairs back to
-     * user (see Map.Entry).
+     * 存储节点，采用红黑树存储
      */
-
     static final class Entry<K,V> implements Map.Entry<K,V> {
         K key;
         V value;
@@ -2217,7 +2102,10 @@ public class TreeMap<K,V>
         return (p == null) ? null: p.right;
     }
 
-    /** From CLR */
+    /**
+     * From CLR
+     * 红黑树左旋
+     * */
     private void rotateLeft(Entry<K,V> p) {
         if (p != null) {
             Entry<K,V> r = p.right;
@@ -2253,69 +2141,146 @@ public class TreeMap<K,V>
         }
     }
 
-    /** From CLR */
+    /**
+     * From CLR
+     * 插入再平衡，插入的元素默认都是红色，下面根据情况来进行平衡
+     * 插入的元素如果是根节点，则直接涂成黑色即可，不用平衡
+     * 插入的元素的父节点如果为黑色，不需要平衡
+     * 插入的元素的父节点如果为红色，则违背了特性4，需要平衡，平衡时又分成下面三种情况
+     *      -- 特性4：如果一个节点是红色的，则它的子节点必须是黑色的
+     *  A.如果父节点是祖父节点的左节点
+     *   · 父节点为红色，叔叔节点也为红色
+     *     (1）将父节点设为黑色；
+     *    （2）将叔叔节点设为黑色；
+     *    （3）将祖父节点设为红色；
+     *    （4）将祖父节点设为新的当前节点，进入下一次循环判断
+     *   · 父节点为红色，叔叔节点为黑色，且当前节点是其父节点的右节点
+     *    （1）将父节点作为新的当前节点；
+     *    （2）以新当节点为支点进行左旋，进入情况3）
+     *   · 父节点为红色，叔叔节点为黑色，且当前节点是其父节点的左节点
+     *     (1）将父节点设为黑色；
+     *    （2）将祖父节点设为红色；
+     *    （3）以祖父节点为支点进行右旋，进入下一次循环判断
+     *
+     *  B.如果父节点是祖父节点的右节点，则正好与上面反过来
+     *   · 父节点为红色，叔叔节点也为红色
+     *    （1）将父节点设为黑色；
+     *    （2）将叔叔节点设为黑色；
+     *    （3）将祖父节点设为红色；
+     *    （4）将祖父节点设为新的当前节点，进入下一次循环判断
+     *   · 父节点为红色，叔叔节点为黑色，且当前节点是其父节点的左节点
+     *    （1）将父节点作为新的当前节点；
+     *    （2）以新当节点为支点进行右旋
+     *   · 父节点为红色，叔叔节点为黑色，且当前节点是其父节点的右节点
+     *     (1）将父节点设为黑色；
+     *    （2）将祖父节点设为红色；
+     *    （3）以祖父节点为支点进行左旋，进入下一次循环判断
+     * */
     private void fixAfterInsertion(Entry<K,V> x) {
+        // 插入的节点为红节点，x为当前节点
         x.color = RED;
-
+        // 只有当插入节点不是根节点且其父节点为红色时才需要平衡（违背了特性4）
         while (x != null && x != root && x.parent.color == RED) {
+            // a）如果父节点是祖父节点的左节点
+            // y为叔叔节点
             if (parentOf(x) == leftOf(parentOf(parentOf(x)))) {
                 Entry<K,V> y = rightOf(parentOf(parentOf(x)));
                 if (colorOf(y) == RED) {
+                    // 情况1）如果叔叔节点为红色
+                    // （1）将父节点设为黑色
                     setColor(parentOf(x), BLACK);
+                    // （2）将叔叔节点设为黑色
                     setColor(y, BLACK);
+                    // （3）将祖父节点设为红色
                     setColor(parentOf(parentOf(x)), RED);
+                    // （4）将祖父节点设为新的当前节点
                     x = parentOf(parentOf(x));
                 } else {
+                    // 如果叔叔节点为黑色
+                    // 情况2）如果当前节点为其父节点的右节点
                     if (x == rightOf(parentOf(x))) {
+                        // （1）将父节点设为当前节点
                         x = parentOf(x);
+                        // （2）以新当前节点左旋
                         rotateLeft(x);
                     }
+                    // 情况3）如果当前节点为其父节点的左节点（如果是情况2）则左旋之后新当前节点正好为其父节点的左节点了）
+                    // （1）将父节点设为黑色
                     setColor(parentOf(x), BLACK);
+                    // （2）将祖父节点设为红色
                     setColor(parentOf(parentOf(x)), RED);
+                    // （3）以祖父节点为支点进行右旋
                     rotateRight(parentOf(parentOf(x)));
                 }
             } else {
+                // b）如果父节点是祖父节点的右节点
+                // y是叔叔节点
                 Entry<K,V> y = leftOf(parentOf(parentOf(x)));
                 if (colorOf(y) == RED) {
+                    // 情况1）如果叔叔节点为红色
+                    // （1）将父节点设为黑色
                     setColor(parentOf(x), BLACK);
+                    // （2）将叔叔节点设为黑色
                     setColor(y, BLACK);
+                    // （3）将祖父节点设为红色
                     setColor(parentOf(parentOf(x)), RED);
+                    // （4）将祖父节点设为新的当前节点
                     x = parentOf(parentOf(x));
                 } else {
+                    // 如果叔叔节点为黑色
+                    // 情况2）如果当前节点为其父节点的左节点
                     if (x == leftOf(parentOf(x))) {
+                        // （1）将父节点设为当前节点
                         x = parentOf(x);
+                        // （2）以新当前节点右旋
                         rotateRight(x);
                     }
+                    // 情况3）如果当前节点为其父节点的右节点（如果是情况2）则右旋之后新当前节点正好为其父节点的右节点了）
+                    // （1）将父节点设为黑色
                     setColor(parentOf(x), BLACK);
+                    // （2）将祖父节点设为红色
                     setColor(parentOf(parentOf(x)), RED);
+                    // （3）以祖父节点为支点进行左旋
                     rotateLeft(parentOf(parentOf(x)));
                 }
             }
         }
+        // 平衡完成后将根节点设为黑色
         root.color = BLACK;
     }
 
     /**
-     * Delete node p, and then rebalance the tree.
+     * 红黑树的删除再平衡
+     * （1）如果删除的位置有两个叶子节点，则从其右子树中取最小的元素放到删除的位置，然后把删除位置移到替代元素的位置，进入下一步。
+     * （2）如果删除的位置只有一个叶子节点（有可能是经过第一步转换后的删除位置），则把那个叶子节点作为替代元素，放到删除的位置，然后把这个叶子节点删除。
+     * （3）如果删除的位置没有叶子节点，则直接把这个删除位置的元素删除即可。
+     * （4）针对红黑树，如果删除位置是黑色节点，还需要做再平衡。
+     * （5）如果有替代元素，则以替代元素作为当前节点进入再平衡。
+     * （6）如果没有替代元素，则以删除的位置的元素作为当前节点进入再平衡，平衡之后再删除这个节点
      */
     private void deleteEntry(Entry<K,V> p) {
         modCount++;
+        // 元素个数减1
         size--;
-
-        // If strictly internal, copy successor's element to p and then make p
-        // point to successor.
+        // 如果当前节点既有左子节点，又有右子节点
+        // 取其右子树中最小的节点
         if (p.left != null && p.right != null) {
             Entry<K,V> s = successor(p);
+            // 用右子树中最小节点的值替换当前节点的值
             p.key = s.key;
             p.value = s.value;
+            // 把右子树中最小节点设为当前节点
             p = s;
-        } // p has 2 children
+            // 这种情况实际上并没有删除p节点，而是把p节点的值改了，实际删除的是p的后继节点
+        }
 
-        // Start fixup at replacement node, if it exists.
+        // 如果原来的当前节点（p）有2个子节点，则当前节点已经变成原来p的右子树中的最小节点了，也就是说其没有左子节点了
+        // 到这一步，p肯定只有一个子节点了
+        // 如果当前节点有子节点，则用子节点替换当前节点.
         Entry<K,V> replacement = (p.left != null ? p.left : p.right);
 
         if (replacement != null) {
-            // Link replacement to parent
+            // 把替换节点直接放到当前节点的位置上（相当于删除了p，并把替换节点移动过来了）
             replacement.parent = p.parent;
             if (p.parent == null)
                 root = replacement;
@@ -2324,18 +2289,20 @@ public class TreeMap<K,V>
             else
                 p.parent.right = replacement;
 
-            // Null out links so they are OK to use by fixAfterDeletion.
+            // 将p的各项属性都设为空
             p.left = p.right = p.parent = null;
 
-            // Fix replacement
-            if (p.color == BLACK)
-                fixAfterDeletion(replacement);
-        } else if (p.parent == null) { // return if we are the only node.
+            // 如果p是黑节点，则需要再平衡
+            if (p.color == BLACK) fixAfterDeletion(replacement);
+        } else if (p.parent == null) {
+            // 如果当前节点就是根节点，则直接将根节点设为空即可
             root = null;
-        } else { //  No children. Use self as phantom replacement and unlink.
+        } else {
+            //  如果当前节点没有子节点且其为黑节点，则把自己当作虚拟的替换节点进行再平衡
             if (p.color == BLACK)
+                // 经过上面的处理，真正删除的肯定是黑色节点才会进入到再平衡阶段
                 fixAfterDeletion(p);
-
+            // 平衡完成后删除当前节点（与父节点断绝关系）
             if (p.parent != null) {
                 if (p == p.parent.left)
                     p.parent.left = null;
@@ -2346,66 +2313,153 @@ public class TreeMap<K,V>
         }
     }
 
-    /** From CLR */
+    /**
+     * From CLR
+     * 因为删除的是黑色节点，导致整颗树不平衡了，所以这里我们假设把删除的黑色赋予当前节点，这样当前节点除了它自已的颜色还多了一个黑色，那么：
+     * （1）如果当前节点是根节点，则直接涂黑即可，不需要再平衡；
+     * （2）如果当前节点是红+黑节点，则直接涂黑即可，不需要平衡；
+     * （3）如果当前节点是黑+黑节点，则我们只要通过旋转把这个多出来的黑色不断的向上传递到一个红色节点即可，这又可能会出现以下四种情况
+     * 假设当前节点为父节点的左子节点
+     * * x是黑+黑节点，x的兄弟是红节点
+     *     *   (1）将兄弟节点设为黑色；
+     *     * （2）将父节点设为红色；
+     *     * （3）以父节点为支点进行左旋；
+     *     * （4）重新设置x的兄弟节点，进入下一步；
+     * * x是黑+黑节点，x的兄弟是黑节点，且兄弟节点的两个子节点都是黑色
+     *     * （1）将兄弟节点设置为红色；
+     *     * （2）将x的父节点作为新的当前节点，进入下一次循环；
+     * * x是黑+黑节点，x的兄弟是黑节点，且兄弟节点的右子节点为黑色，左子节点为红色
+     *     * （1）将兄弟节点的左子节点设为黑色；
+     *     * （2）将兄弟节点设为红色；
+     *     * （3）以兄弟节点为支点进行右旋；
+     *     * （4）重新设置x的兄弟节点，进入下一步；
+     * * x是黑+黑节点，x的兄弟是黑节点，且兄弟节点的右子节点为红色，左子节点任意颜色
+     *     * （1）将兄弟节点的颜色设为父节点的颜色；
+     *     * （2）将父节点设为黑色；
+     *     * （3）将兄弟节点的右子节点设为黑色；
+     *     * （4）以父节点为支点进行左旋；
+     *     * （5）将root作为新的当前节点（退出循环）
+     *
+     * 假设当前节点为父节点的右子节点，正好反过来
+     * * x是黑+黑节点，x的兄弟是红节点
+     *     * （1）将兄弟节点设为黑色；
+     *     * （2）将父节点设为红色；
+     *     * （3）以父节点为支点进行右旋；
+     *     * （4）重新设置x的兄弟节点，进入下一步；
+     * * x是黑+黑节点，x的兄弟是黑节点，且兄弟节点的两个子节点都是黑色
+     *     * （1）将兄弟节点设置为红色；
+     *     * （2）将x的父节点作为新的当前节点，进入下一次循环；
+     * * x是黑+黑节点，x的兄弟是黑节点，且兄弟节点的左子节点为黑色，右子节点为红色
+     *     * （1）将兄弟节点的右子节点设为黑色；
+     *     * （2）将兄弟节点设为红色；
+     *     * （3）以兄弟节点为支点进行左旋；
+     *     * （4）重新设置x的兄弟节点，进入下一步；
+     * * x是黑+黑节点，x的兄弟是黑节点，且兄弟节点的左子节点为红色，右子节点任意颜色
+     *     * （1）将兄弟节点的颜色设为父节点的颜色
+     *     * （2）将父节点设为黑色；
+     *     * （3）将兄弟节点的左子节点设为黑色；
+     *     * （4）以父节点为支点进行右旋；
+     *     * （5）将root作为新的当前节点（退出循环）
+     *
+     * */
     private void fixAfterDeletion(Entry<K,V> x) {
+        // 只有当前节点不是根节点且当前节点是黑色时才进入循环
         while (x != root && colorOf(x) == BLACK) {
             if (x == leftOf(parentOf(x))) {
+                // 如果当前节点是其父节点的左子节点
+                // sib是当前节点的兄弟节点
                 Entry<K,V> sib = rightOf(parentOf(x));
-
+                // 情况1）如果兄弟节点是红色
                 if (colorOf(sib) == RED) {
+                    // （1）将兄弟节点设为黑色
                     setColor(sib, BLACK);
+                    // （2）将父节点设为红色
                     setColor(parentOf(x), RED);
+                    // （3）以父节点为支点进行左旋
                     rotateLeft(parentOf(x));
+                    // （4）重新设置x的兄弟节点，进入下一步
                     sib = rightOf(parentOf(x));
                 }
-
-                if (colorOf(leftOf(sib))  == BLACK &&
-                    colorOf(rightOf(sib)) == BLACK) {
+                // 情况2）如果兄弟节点的两个子节点都是黑色
+                if (colorOf(leftOf(sib))  == BLACK && colorOf(rightOf(sib)) == BLACK) {
+                    // （1）将兄弟节点设置为红色
                     setColor(sib, RED);
+                    // （2）将x的父节点作为新的当前节点，进入下一次循环
                     x = parentOf(x);
                 } else {
                     if (colorOf(rightOf(sib)) == BLACK) {
+                        // 情况3）如果兄弟节点的右子节点为黑色
+                        // （1）将兄弟节点的左子节点设为黑色
                         setColor(leftOf(sib), BLACK);
+                        //（2）将兄弟节点设为红色
                         setColor(sib, RED);
+                        //（3）以兄弟节点为支点进行右旋
                         rotateRight(sib);
+                        // （4）重新设置x的兄弟节点
                         sib = rightOf(parentOf(x));
                     }
+                    // 情况4）
+                    // （1）将兄弟节点的颜色设为父节点的颜色
                     setColor(sib, colorOf(parentOf(x)));
+                    // （2）将父节点设为黑色
                     setColor(parentOf(x), BLACK);
+                    // （3）将兄弟节点的右子节点设为黑色
                     setColor(rightOf(sib), BLACK);
+                    // （4）以父节点为支点进行左旋
                     rotateLeft(parentOf(x));
+                    // （5）将root作为新的当前节点（退出循环）
                     x = root;
                 }
             } else { // symmetric
+                // 如果当前节点是其父节点的右子节点
+                // sib是当前节点的兄弟节点
                 Entry<K,V> sib = leftOf(parentOf(x));
-
+                // 情况1）如果兄弟节点是红色
                 if (colorOf(sib) == RED) {
+                    // （1）将兄弟节点设为黑色
                     setColor(sib, BLACK);
+                    // （2）将父节点设为红色
                     setColor(parentOf(x), RED);
+                    // （3）以父节点为支点进行右旋
                     rotateRight(parentOf(x));
+                    // （4）重新设置x的兄弟节点
                     sib = leftOf(parentOf(x));
                 }
 
-                if (colorOf(rightOf(sib)) == BLACK &&
-                    colorOf(leftOf(sib)) == BLACK) {
+                if (colorOf(rightOf(sib)) == BLACK && colorOf(leftOf(sib)) == BLACK) {
+                    // 情况2）如果兄弟节点的两个子节点都是黑色
+                    // （1）将兄弟节点设置为红色
                     setColor(sib, RED);
+                    // （2）将x的父节点作为新的当前节点，进入下一次循环
                     x = parentOf(x);
                 } else {
                     if (colorOf(leftOf(sib)) == BLACK) {
+                        // 情况3）如果兄弟节点的左子节点为黑色
+                        // （1）将兄弟节点的右子节点设为黑色
                         setColor(rightOf(sib), BLACK);
+                        // （2）将兄弟节点设为红色
                         setColor(sib, RED);
+                        // （3）以兄弟节点为支点进行左旋
                         rotateLeft(sib);
+                        // （4）重新设置x的兄弟节点
                         sib = leftOf(parentOf(x));
                     }
+                    // 情况4）
+                    // （1）将兄弟节点的颜色设为父节点的颜色
                     setColor(sib, colorOf(parentOf(x)));
+                    // （2）将父节点设为黑色
                     setColor(parentOf(x), BLACK);
+                    // （3）将兄弟节点的左子节点设为黑色
                     setColor(leftOf(sib), BLACK);
+                    // （4）以父节点为支点进行右旋
                     rotateRight(parentOf(x));
+                    // （5）将root作为新的当前节点（退出循环）
                     x = root;
                 }
             }
         }
-
+        // 退出条件为多出来的黑色向上传递到了根节点或者红节点
+        // 则将x设为黑色即可满足红黑树规则
         setColor(x, BLACK);
     }
 

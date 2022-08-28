@@ -89,8 +89,10 @@ public abstract class Reference<T> {
      * field is also used for linking Reference objects in the pending list.
      */
 
+    // 实际存储Key的地方
     private T referent;         /* Treated specially by GC */
 
+    // 引用队列
     volatile ReferenceQueue<? super T> queue;
 
     /* When active:   NULL

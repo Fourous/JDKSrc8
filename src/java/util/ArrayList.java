@@ -11,11 +11,21 @@ import sun.misc.SharedSecrets;
  * ArrayList实现了RandomAccess，提供了随机访问的能力。
  * ArrayList实现了Cloneable，可以被克隆
  * ArrayList实现了Serializable，可以被序列化
+ *
+ * 重要方法：
+ * 几个构造方法：最主要是参数
+ * add(E e) 添加元素
+ * add(int index, E element) 指定索引添加
+ * addAll(Collection c) 两个集合求并集
+ * get(int index) 获取指定索引元素
+ * remove(int index) 删除指定索引元素
+ * remove(Object o) 删除指定元素值元素
+ * retainAll(Collection c) 求两个集合交集
+ * removeAll(Collection c) 求单个方向集合差集
+ * writeObject/readObject ArrayList实现的序列化方法
  * @param <E>
  */
-public class ArrayList<E> extends AbstractList<E>
-        implements List<E>, RandomAccess, Cloneable, java.io.Serializable
-{
+public class ArrayList<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
     private static final long serialVersionUID = 8683452581122892189L;
 
     /**
