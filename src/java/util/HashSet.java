@@ -29,73 +29,17 @@ import java.io.InvalidObjectException;
 import sun.misc.SharedSecrets;
 
 /**
- * This class implements the <tt>Set</tt> interface, backed by a hash table
- * (actually a <tt>HashMap</tt> instance).  It makes no guarantees as to the
- * iteration order of the set; in particular, it does not guarantee that the
- * order will remain constant over time.  This class permits the <tt>null</tt>
- * element.
- *
- * <p>This class offers constant time performance for the basic operations
- * (<tt>add</tt>, <tt>remove</tt>, <tt>contains</tt> and <tt>size</tt>),
- * assuming the hash function disperses the elements properly among the
- * buckets.  Iterating over this set requires time proportional to the sum of
- * the <tt>HashSet</tt> instance's size (the number of elements) plus the
- * "capacity" of the backing <tt>HashMap</tt> instance (the number of
- * buckets).  Thus, it's very important not to set the initial capacity too
- * high (or the load factor too low) if iteration performance is important.
- *
- * <p><strong>Note that this implementation is not synchronized.</strong>
- * If multiple threads access a hash set concurrently, and at least one of
- * the threads modifies the set, it <i>must</i> be synchronized externally.
- * This is typically accomplished by synchronizing on some object that
- * naturally encapsulates the set.
- *
- * If no such object exists, the set should be "wrapped" using the
- * {@link Collections#synchronizedSet Collections.synchronizedSet}
- * method.  This is best done at creation time, to prevent accidental
- * unsynchronized access to the set:<pre>
- *   Set s = Collections.synchronizedSet(new HashSet(...));</pre>
- *
- * <p>The iterators returned by this class's <tt>iterator</tt> method are
- * <i>fail-fast</i>: if the set is modified at any time after the iterator is
- * created, in any way except through the iterator's own <tt>remove</tt>
- * method, the Iterator throws a {@link ConcurrentModificationException}.
- * Thus, in the face of concurrent modification, the iterator fails quickly
- * and cleanly, rather than risking arbitrary, non-deterministic behavior at
- * an undetermined time in the future.
- *
- * <p>Note that the fail-fast behavior of an iterator cannot be guaranteed
- * as it is, generally speaking, impossible to make any hard guarantees in the
- * presence of unsynchronized concurrent modification.  Fail-fast iterators
- * throw <tt>ConcurrentModificationException</tt> on a best-effort basis.
- * Therefore, it would be wrong to write a program that depended on this
- * exception for its correctness: <i>the fail-fast behavior of iterators
- * should be used only to detect bugs.</i>
- *
- * <p>This class is a member of the
- * <a href="{@docRoot}/../technotes/guides/collections/index.html">
- * Java Collections Framework</a>.
- *
- * @param <E> the type of elements maintained by this set
- *
- * @author  Josh Bloch
- * @author  Neal Gafter
- * @see     Collection
- * @see     Set
- * @see     TreeSet
- * @see     HashMap
- * @since   1.2
+ * HashSet是Set的一种实现方式，底层主要使用HashMap来确保元素不重复
  */
-
-public class HashSet<E>
-    extends AbstractSet<E>
-    implements Set<E>, Cloneable, java.io.Serializable
-{
+public class HashSet<E> extends AbstractSet<E> implements Set<E>, Cloneable, java.io.Serializable {
     static final long serialVersionUID = -5024744406713321676L;
 
+    /**
+     * 内部采用HashMap存储
+     */
     private transient HashMap<E,Object> map;
 
-    // Dummy value to associate with an Object in the backing Map
+    // 虚拟对象，用来作为value放到map中
     private static final Object PRESENT = new Object();
 
     /**
@@ -146,17 +90,8 @@ public class HashSet<E>
     }
 
     /**
-     * Constructs a new, empty linked hash set.  (This package private
-     * constructor is only used by LinkedHashSet.) The backing
-     * HashMap instance is a LinkedHashMap with the specified initial
-     * capacity and the specified load factor.
-     *
-     * @param      initialCapacity   the initial capacity of the hash map
-     * @param      loadFactor        the load factor of the hash map
-     * @param      dummy             ignored (distinguishes this
-     *             constructor from other int, float constructor.)
-     * @throws     IllegalArgumentException if the initial capacity is less
-     *             than zero, or if the load factor is nonpositive
+     * 缺省的方法
+     * 留给LinkedHashSet调用
      */
     HashSet(int initialCapacity, float loadFactor, boolean dummy) {
         map = new LinkedHashMap<>(initialCapacity, loadFactor);
@@ -262,83 +197,69 @@ public class HashSet<E>
     }
 
     /**
-     * Save the state of this <tt>HashSet</tt> instance to a stream (that is,
-     * serialize it).
-     *
-     * @serialData The capacity of the backing <tt>HashMap</tt> instance
-     *             (int), and its load factor (float) are emitted, followed by
-     *             the size of the set (the number of elements it contains)
-     *             (int), followed by all of its elements (each an Object) in
-     *             no particular order.
+     * HashSet的序列化写出方法
      */
     private void writeObject(java.io.ObjectOutputStream s)
         throws java.io.IOException {
-        // Write out any hidden serialization magic
+        // 写出非static非transient属性
         s.defaultWriteObject();
 
-        // Write out HashMap capacity and load factor
+        // 写出map的容量和装载因子
         s.writeInt(map.capacity());
         s.writeFloat(map.loadFactor());
 
-        // Write out size
+        // 写出元素个数
         s.writeInt(map.size());
 
-        // Write out all elements in the proper order.
+        // 遍历写入
         for (E e : map.keySet())
             s.writeObject(e);
     }
 
     /**
-     * Reconstitute the <tt>HashSet</tt> instance from a stream (that is,
-     * deserialize it).
+     * 序列化读取方法
      */
-    private void readObject(java.io.ObjectInputStream s)
-        throws java.io.IOException, ClassNotFoundException {
-        // Consume and ignore stream fields (currently zero).
+    private void readObject(java.io.ObjectInputStream s) throws java.io.IOException, ClassNotFoundException {
+        // 读入非static非transient属性
         s.readFields();
-        // Read capacity and verify non-negative.
+        // 读入容量, 并检查不能小于0
         int capacity = s.readInt();
         if (capacity < 0) {
-            throw new InvalidObjectException("Illegal capacity: " +
-                                             capacity);
+            throw new InvalidObjectException("Illegal capacity: " + capacity);
         }
 
         // Read load factor and verify positive and non NaN.
         float loadFactor = s.readFloat();
         if (loadFactor <= 0 || Float.isNaN(loadFactor)) {
-            throw new InvalidObjectException("Illegal load factor: " +
-                                             loadFactor);
+            throw new InvalidObjectException("Illegal load factor: " + loadFactor);
         }
-        // Clamp load factor to range of 0.25...4.0.
+        // 读入装载因子, 并检查不能小于等于0或者是NaN(Not a Number)
         loadFactor = Math.min(Math.max(0.25f, loadFactor), 4.0f);
 
-        // Read size and verify non-negative.
+        // 读入元素个数并检查不能小于0
         int size = s.readInt();
         if (size < 0) {
             throw new InvalidObjectException("Illegal size: " + size);
         }
-        // Set the capacity according to the size and load factor ensuring that
-        // the HashMap is at least 25% full but clamping to maximum capacity.
-        capacity = (int) Math.min(size * Math.min(1 / loadFactor, 4.0f),
-                HashMap.MAXIMUM_CAPACITY);
+        // 根据元素个数重新设置容量
+        // 这是为了保证map有足够的容量容纳所有元素, 防止无意义的扩容
+        capacity = (int) Math.min(size * Math.min(1 / loadFactor, 4.0f), HashMap.MAXIMUM_CAPACITY);
 
         // Constructing the backing map will lazily create an array when the first element is
         // added, so check it before construction. Call HashMap.tableSizeFor to compute the
         // actual allocation size. Check Map.Entry[].class since it's the nearest public type to
         // what is actually created.
+        SharedSecrets.getJavaOISAccess().checkArray(s, Map.Entry[].class, HashMap.tableSizeFor(capacity));
 
-        SharedSecrets.getJavaOISAccess()
-                     .checkArray(s, Map.Entry[].class, HashMap.tableSizeFor(capacity));
-
-        // Create backing HashMap
+        // 创建map, 检查是不是LinkedHashSet类
         map = (((HashSet<?>)this) instanceof LinkedHashSet ?
-               new LinkedHashMap<E,Object>(capacity, loadFactor) :
+                new LinkedHashMap<E,Object>(capacity, loadFactor) :
                new HashMap<E,Object>(capacity, loadFactor));
 
-        // Read in all elements in the proper order.
+        // 读入所有元素, 并放入map中
         for (int i=0; i<size; i++) {
             @SuppressWarnings("unchecked")
-                E e = (E) s.readObject();
+            E e = (E) s.readObject();
             map.put(e, PRESENT);
         }
     }

@@ -1,87 +1,8 @@
-/*
- * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
- * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- */
-
 package java.util;
 
 /**
- * A collection that contains no duplicate elements.  More formally, sets
- * contain no pair of elements <code>e1</code> and <code>e2</code> such that
- * <code>e1.equals(e2)</code>, and at most one null element.  As implied by
- * its name, this interface models the mathematical <i>set</i> abstraction.
- *
- * <p>The <tt>Set</tt> interface places additional stipulations, beyond those
- * inherited from the <tt>Collection</tt> interface, on the contracts of all
- * constructors and on the contracts of the <tt>add</tt>, <tt>equals</tt> and
- * <tt>hashCode</tt> methods.  Declarations for other inherited methods are
- * also included here for convenience.  (The specifications accompanying these
- * declarations have been tailored to the <tt>Set</tt> interface, but they do
- * not contain any additional stipulations.)
- *
- * <p>The additional stipulation on constructors is, not surprisingly,
- * that all constructors must create a set that contains no duplicate elements
- * (as defined above).
- *
- * <p>Note: Great care must be exercised if mutable objects are used as set
- * elements.  The behavior of a set is not specified if the value of an object
- * is changed in a manner that affects <tt>equals</tt> comparisons while the
- * object is an element in the set.  A special case of this prohibition is
- * that it is not permissible for a set to contain itself as an element.
- *
- * <p>Some set implementations have restrictions on the elements that
- * they may contain.  For example, some implementations prohibit null elements,
- * and some have restrictions on the types of their elements.  Attempting to
- * add an ineligible element throws an unchecked exception, typically
- * <tt>NullPointerException</tt> or <tt>ClassCastException</tt>.  Attempting
- * to query the presence of an ineligible element may throw an exception,
- * or it may simply return false; some implementations will exhibit the former
- * behavior and some will exhibit the latter.  More generally, attempting an
- * operation on an ineligible element whose completion would not result in
- * the insertion of an ineligible element into the set may throw an
- * exception or it may succeed, at the option of the implementation.
- * Such exceptions are marked as "optional" in the specification for this
- * interface.
- *
- * <p>This interface is a member of the
- * <a href="{@docRoot}/../technotes/guides/collections/index.html">
- * Java Collections Framework</a>.
- *
- * @param <E> the type of elements maintained by this set
- *
- * @author  Josh Bloch
- * @author  Neal Gafter
- * @see Collection
- * @see List
- * @see SortedSet
- * @see HashSet
- * @see TreeSet
- * @see AbstractSet
- * @see Collections#singleton(java.lang.Object)
- * @see Collections#EMPTY_SET
- * @since 1.2
+ * java里面的Set对应于数学概念上的集合，里面的元素是不可重复的，通常使用Map或者List来实现
  */
-
 public interface Set<E> extends Collection<E> {
     // Query Operations
 
@@ -384,27 +305,8 @@ public interface Set<E> extends Collection<E> {
     int hashCode();
 
     /**
-     * Creates a {@code Spliterator} over the elements in this set.
-     *
-     * <p>The {@code Spliterator} reports {@link Spliterator#DISTINCT}.
-     * Implementations should document the reporting of additional
-     * characteristic values.
-     *
-     * @implSpec
-     * The default implementation creates a
-     * <em><a href="Spliterator.html#binding">late-binding</a></em> spliterator
-     * from the set's {@code Iterator}.  The spliterator inherits the
-     * <em>fail-fast</em> properties of the set's iterator.
-     * <p>
-     * The created {@code Spliterator} additionally reports
-     * {@link Spliterator#SIZED}.
-     *
-     * @implNote
-     * The created {@code Spliterator} additionally reports
-     * {@link Spliterator#SUBSIZED}.
-     *
-     * @return a {@code Spliterator} over the elements in this set
-     * @since 1.8
+     * Set是支持多线程并发的
+     * 可分割的迭代器
      */
     @Override
     default Spliterator<E> spliterator() {

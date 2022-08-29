@@ -39,90 +39,37 @@ import java.util.function.Consumer;
 import sun.misc.SharedSecrets;
 
 /**
- * Resizable-array implementation of the {@link Deque} interface.  Array
- * deques have no capacity restrictions; they grow as necessary to support
- * usage.  They are not thread-safe; in the absence of external
- * synchronization, they do not support concurrent access by multiple threads.
- * Null elements are prohibited.  This class is likely to be faster than
- * {@link Stack} when used as a stack, and faster than {@link LinkedList}
- * when used as a queue.
- *
- * <p>Most {@code ArrayDeque} operations run in amortized constant time.
- * Exceptions include {@link #remove(Object) remove}, {@link
- * #removeFirstOccurrence removeFirstOccurrence}, {@link #removeLastOccurrence
- * removeLastOccurrence}, {@link #contains contains}, {@link #iterator
- * iterator.remove()}, and the bulk operations, all of which run in linear
- * time.
- *
- * <p>The iterators returned by this class's {@code iterator} method are
- * <i>fail-fast</i>: If the deque is modified at any time after the iterator
- * is created, in any way except through the iterator's own {@code remove}
- * method, the iterator will generally throw a {@link
- * ConcurrentModificationException}.  Thus, in the face of concurrent
- * modification, the iterator fails quickly and cleanly, rather than risking
- * arbitrary, non-deterministic behavior at an undetermined time in the
- * future.
- *
- * <p>Note that the fail-fast behavior of an iterator cannot be guaranteed
- * as it is, generally speaking, impossible to make any hard guarantees in the
- * presence of unsynchronized concurrent modification.  Fail-fast iterators
- * throw {@code ConcurrentModificationException} on a best-effort basis.
- * Therefore, it would be wrong to write a program that depended on this
- * exception for its correctness: <i>the fail-fast behavior of iterators
- * should be used only to detect bugs.</i>
- *
- * <p>This class and its iterator implement all of the
- * <em>optional</em> methods of the {@link Collection} and {@link
- * Iterator} interfaces.
- *
- * <p>This class is a member of the
- * <a href="{@docRoot}/../technotes/guides/collections/index.html">
- * Java Collections Framework</a>.
- *
- * @author  Josh Bloch and Doug Lea
- * @since   1.6
- * @param <E> the type of elements held in this collection
+ * 双端队列是一种特殊的队列，它的两端都可以进出元素，故而得名双端队列
+ * ArrayDeque是一种以数组方式实现的双端队列，它是非线程安全的
  */
-public class ArrayDeque<E> extends AbstractCollection<E>
-                           implements Deque<E>, Cloneable, Serializable
-{
+public class ArrayDeque<E> extends AbstractCollection<E> implements Deque<E>, Cloneable, Serializable {
     /**
-     * The array in which the elements of the deque are stored.
-     * The capacity of the deque is the length of this array, which is
-     * always a power of two. The array is never allowed to become
-     * full, except transiently within an addX method where it is
-     * resized (see doubleCapacity) immediately upon becoming full,
-     * thus avoiding head and tail wrapping around to equal each
-     * other.  We also guarantee that all array cells not holding
-     * deque elements are always null.
+     * 存储元素的数组
+     * 头尾指针标识队列的头和尾
      */
-    transient Object[] elements; // non-private to simplify nested class access
+    transient Object[] elements;
 
     /**
-     * The index of the element at the head of the deque (which is the
-     * element that would be removed by remove() or pop()); or an
-     * arbitrary number equal to tail if the deque is empty.
+     * 队列头位置
      */
     transient int head;
 
     /**
-     * The index at which the next element would be added to the tail
-     * of the deque (via addLast(E), add(E), or push(E)).
+     * 队列尾位置
      */
     transient int tail;
 
     /**
-     * The minimum capacity that we'll use for a newly created deque.
-     * Must be a power of 2.
+     * 最小初始容量
      */
     private static final int MIN_INITIAL_CAPACITY = 8;
 
-    // ******  Array allocation and resizing utilities ******
-
+    /**
+     * 计算容量，这段代码的逻辑是算出大于numElements的最接近的2的n次方且不小于8
+     * 3->8 9->16 33->64
+     */
     private static int calculateSize(int numElements) {
         int initialCapacity = MIN_INITIAL_CAPACITY;
-        // Find the best power of two to hold elements.
-        // Tests "<=" because arrays aren't kept full.
         if (numElements >= initialCapacity) {
             initialCapacity = numElements;
             initialCapacity |= (initialCapacity >>>  1);
@@ -131,38 +78,38 @@ public class ArrayDeque<E> extends AbstractCollection<E>
             initialCapacity |= (initialCapacity >>>  8);
             initialCapacity |= (initialCapacity >>> 16);
             initialCapacity++;
-
-            if (initialCapacity < 0)   // Too many elements, must back off
-                initialCapacity >>>= 1;// Good luck allocating 2 ^ 30 elements
+            if (initialCapacity < 0)
+                initialCapacity >>>= 1;
         }
         return initialCapacity;
     }
 
     /**
-     * Allocates empty array to hold the given number of elements.
-     *
-     * @param numElements  the number of elements to hold
+     * 初始化数组
      */
     private void allocateElements(int numElements) {
         elements = new Object[calculateSize(numElements)];
     }
 
     /**
-     * Doubles the capacity of this deque.  Call only when full, i.e.,
-     * when head and tail have wrapped around to become equal.
+     * 这里扩容非常简单，直接两倍
      */
     private void doubleCapacity() {
         assert head == tail;
         int p = head;
         int n = elements.length;
-        int r = n - p; // number of elements to the right of p
+        int r = n - p;
+        // 两倍
         int newCapacity = n << 1;
-        if (newCapacity < 0)
-            throw new IllegalStateException("Sorry, deque too big");
+        if (newCapacity < 0) throw new IllegalStateException("Sorry, deque too big");
         Object[] a = new Object[newCapacity];
+        // 将旧数组head之后的元素拷贝到新数组中
         System.arraycopy(elements, p, a, 0, r);
+        // 将旧数组下标0到head之间的元素拷贝到新数组中
         System.arraycopy(elements, 0, a, r, p);
+        // 赋值为新数组
         elements = a;
+        // head指向0，tail指向旧数组长度表示的位置
         head = 0;
         tail = n;
     }
@@ -186,32 +133,21 @@ public class ArrayDeque<E> extends AbstractCollection<E>
     }
 
     /**
-     * Constructs an empty array deque with an initial capacity
-     * sufficient to hold 16 elements.
+     * 默认构造函数，初始化容量为16
      */
     public ArrayDeque() {
         elements = new Object[16];
     }
 
     /**
-     * Constructs an empty array deque with an initial capacity
-     * sufficient to hold the specified number of elements.
-     *
-     * @param numElements  lower bound on initial capacity of the deque
+     * 指定元素个数初始化
      */
     public ArrayDeque(int numElements) {
         allocateElements(numElements);
     }
 
     /**
-     * Constructs a deque containing the elements of the specified
-     * collection, in the order they are returned by the collection's
-     * iterator.  (The first element returned by the collection's
-     * iterator becomes the first element, or <i>front</i> of the
-     * deque.)
-     *
-     * @param c the collection whose elements are to be placed into the deque
-     * @throws NullPointerException if the specified collection is null
+     * 将集合c中的元素初始化到数组中
      */
     public ArrayDeque(Collection<? extends E> c) {
         allocateElements(c.size());
@@ -223,31 +159,36 @@ public class ArrayDeque<E> extends AbstractCollection<E>
     // terms of these.
 
     /**
-     * Inserts the specified element at the front of this deque.
-     *
-     * @param e the element to add
-     * @throws NullPointerException if the specified element is null
+     * （1）入队有两种方式，从队列头或者从队列尾；
+     * （2）如果容量不够了，直接扩大为两倍；
+     * （3）通过取模的方式让头尾指针在数组范围内循环
+     */
+
+    /**
+     * 队列头入队
      */
     public void addFirst(E e) {
-        if (e == null)
-            throw new NullPointerException();
+        // 不允许null元素
+        if (e == null) throw new NullPointerException();
+        // 将head指针减1并与数组长度减1取模，防止数组到头了边界溢出
+        // 如果到头了就从尾再向前，相当于循环利用数组
         elements[head = (head - 1) & (elements.length - 1)] = e;
+        // 如果头尾挨在一起了，就扩容，直接扩容两倍
         if (head == tail)
             doubleCapacity();
     }
 
     /**
-     * Inserts the specified element at the end of this deque.
-     *
-     * <p>This method is equivalent to {@link #add}.
-     *
-     * @param e the element to add
-     * @throws NullPointerException if the specified element is null
+     * 队尾入队
      */
     public void addLast(E e) {
-        if (e == null)
-            throw new NullPointerException();
+        // 不允许空
+        if (e == null) throw new NullPointerException();
+        // 在尾指针的位置放入元素
+        // 注意，tail指针指向的是队列最后一个元素的下一个位置
         elements[tail] = e;
+        // tail指针加1，如果到数组尾了就从头开始
+        // 可以看到，length是2的N次方，x&(len-1) = x%len
         if ( (tail = (tail + 1) & (elements.length - 1)) == head)
             doubleCapacity();
     }
@@ -296,25 +237,38 @@ public class ArrayDeque<E> extends AbstractCollection<E>
         return x;
     }
 
+    /**
+     * （1）出队有两种方式，从队列头或者从队列尾；
+     * （2）通过取模的方式让头尾指针在数组范围内循环；
+     * （3）出队之后没有缩容
+     */
+    // 从队列头出队
     public E pollFirst() {
         int h = head;
+        // 取队列头元素
         @SuppressWarnings("unchecked")
         E result = (E) elements[h];
-        // Element is null if deque empty
-        if (result == null)
-            return null;
-        elements[h] = null;     // Must null out slot
+        // 为空则返空
+        if (result == null) return null;
+        // 将队列头置为空
+        elements[h] = null;
+        // 队列头指针右移一位
         head = (h + 1) & (elements.length - 1);
         return result;
     }
 
+    // 从队列尾出队
     public E pollLast() {
+        // 尾指针左移一位
         int t = (tail - 1) & (elements.length - 1);
+        // 取当前尾指针处元素
         @SuppressWarnings("unchecked")
         E result = (E) elements[t];
-        if (result == null)
-            return null;
+        // 如果队列为空返回null
+        if (result == null) return null;
+        // 将当前尾指针处置为空
         elements[t] = null;
+        // tail指向新的尾指针处
         tail = t;
         return result;
     }
