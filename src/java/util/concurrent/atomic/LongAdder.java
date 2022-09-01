@@ -1,93 +1,61 @@
-/*
- * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- */
-
-/*
- *
- *
- *
- *
- *
- * Written by Doug Lea with assistance from members of JCP JSR-166
- * Expert Group and released to the public domain, as explained at
- * http://creativecommons.org/publicdomain/zero/1.0/
- */
-
 package java.util.concurrent.atomic;
 import java.io.Serializable;
 
 /**
- * One or more variables that together maintain an initially zero
- * {@code long} sum.  When updates (method {@link #add}) are contended
- * across threads, the set of variables may grow dynamically to reduce
- * contention. Method {@link #sum} (or, equivalently, {@link
- * #longValue}) returns the current total combined across the
- * variables maintaining the sum.
- *
- * <p>This class is usually preferable to {@link AtomicLong} when
- * multiple threads update a common sum that is used for purposes such
- * as collecting statistics, not for fine-grained synchronization
- * control.  Under low update contention, the two classes have similar
- * characteristics. But under high contention, expected throughput of
- * this class is significantly higher, at the expense of higher space
- * consumption.
- *
- * <p>LongAdders can be used with a {@link
- * java.util.concurrent.ConcurrentHashMap} to maintain a scalable
- * frequency map (a form of histogram or multiset). For example, to
- * add a count to a {@code ConcurrentHashMap<String,LongAdder> freqs},
- * initializing if not already present, you can use {@code
- * freqs.computeIfAbsent(k -> new LongAdder()).increment();}
- *
- * <p>This class extends {@link Number}, but does <em>not</em> define
- * methods such as {@code equals}, {@code hashCode} and {@code
- * compareTo} because instances are expected to be mutated, and so are
- * not useful as collection keys.
- *
- * @since 1.8
- * @author Doug Lea
+ * LongAdder是java8中新增的原子类，在多线程环境中，它比AtomicLong性能要高出不少，特别是写多的场景
+ * LongAdder的原理是，在最初无竞争时，只更新base的值，当有多线程竞争时通过分段的思想，让不同的线程更新不同的段，最后把这些段相加就得到了完整的LongAdder存储的值
  */
 public class LongAdder extends Striped64 implements Serializable {
     private static final long serialVersionUID = 7249069246863182397L;
 
     /**
-     * Creates a new adder with initial sum of zero.
+     * 默认构造是给的0
      */
     public LongAdder() {
     }
 
     /**
-     * Adds the given value.
-     *
-     * @param x the value to add
+     * 添加元素
+     * （1）最初无竞争时只更新base；
+     * （2）直到更新base失败时，创建cells数组；
+     * （3）当多个线程竞争同一个Cell比较激烈时，可能要扩容
      */
     public void add(long x) {
-        Cell[] as; long b, v; int m; Cell a;
+        /**
+         * Striped64中的cells属性
+         */
+        Cell[] as;
+        /**
+         * B Striped64中的base属性
+         * V 当前线程hash到的Cell中存储的值
+         */
+        long b, v;
+        /**
+         * cells的长度减1，hash时作为掩码使用
+         */
+        int m;
+        /**
+         * 当前线程hash到的Cell
+         */
+        Cell a;
+
+        // 条件1：cells不为空，说明出现过竞争，cells已经创建
+        // 条件2：cas操作base失败，说明其它线程先一步修改了base，正在出现竞争
         if ((as = cells) != null || !casBase(b = base, b + x)) {
+            // true表示当前竞争还不激烈
+            // false表示竞争激烈，多个线程hash到同一个Cell，可能要扩容
             boolean uncontended = true;
+            // 条件1：cells为空，说明正在出现竞争，上面是从条件2过来的
+            // 条件2：应该不会出现
+            // 条件3：当前线程所在的Cell为空，说明当前线程还没有更新过Cell，应初始化一个Cell
+            // 条件4：更新当前线程所在的Cell失败，说明现在竞争很激烈，多个线程hash到了同一个Cell，应扩容
             if (as == null || (m = as.length - 1) < 0 ||
+                // getProbe()方法返回的是线程中的threadLocalRandomProbe字段
+                // 它是通过随机数生成的一个值，对于一个确定的线程这个值是固定的
+                // 除非刻意修改它
                 (a = as[getProbe() & m]) == null ||
                 !(uncontended = a.cas(v = a.value, v + x)))
+                // 调用Striped64中的方法处理
                 longAccumulate(x, null, uncontended);
         }
     }
@@ -107,19 +75,19 @@ public class LongAdder extends Striped64 implements Serializable {
     }
 
     /**
-     * Returns the current sum.  The returned value is <em>NOT</em> an
-     * atomic snapshot; invocation in the absence of concurrent
-     * updates returns an accurate result, but concurrent updates that
-     * occur while the sum is being calculated might not be
-     * incorporated.
-     *
-     * @return the sum
+     * sum()方法是获取LongAdder中真正存储的值的大小，通过把base和所有段相加得到
+     * 可以看到，这里相加没有任何保护Cell操作，说明就算在计算过程中有修改，也不会加入进去
+     * 说明LongAdder不是强一致性的，它是最终一致性
      */
     public long sum() {
         Cell[] as = cells; Cell a;
+        // sum初始等于base
         long sum = base;
+        // 如果cells不为空
         if (as != null) {
+            // 遍历Cell
             for (int i = 0; i < as.length; ++i) {
+                // 如果所在的Cell不为空，就把它的value累加到sum中
                 if ((a = as[i]) != null)
                     sum += a.value;
             }

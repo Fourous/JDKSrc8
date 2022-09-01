@@ -32,68 +32,9 @@ import java.util.concurrent.Future;
 import java.io.IOException;
 
 /**
- * An asynchronous channel for stream-oriented listening sockets.
- *
- * <p> An asynchronous server-socket channel is created by invoking the
- * {@link #open open} method of this class.
- * A newly-created asynchronous server-socket channel is open but not yet bound.
- * It can be bound to a local address and configured to listen for connections
- * by invoking the {@link #bind(SocketAddress,int) bind} method. Once bound,
- * the {@link #accept(Object,CompletionHandler) accept} method
- * is used to initiate the accepting of connections to the channel's socket.
- * An attempt to invoke the <tt>accept</tt> method on an unbound channel will
- * cause a {@link NotYetBoundException} to be thrown.
- *
- * <p> Channels of this type are safe for use by multiple concurrent threads
- * though at most one accept operation can be outstanding at any time.
- * If a thread initiates an accept operation before a previous accept operation
- * has completed then an {@link AcceptPendingException} will be thrown.
- *
- * <p> Socket options are configured using the {@link #setOption(SocketOption,Object)
- * setOption} method. Channels of this type support the following options:
- * <blockquote>
- * <table border summary="Socket options">
- *   <tr>
- *     <th>Option Name</th>
- *     <th>Description</th>
- *   </tr>
- *   <tr>
- *     <td> {@link java.net.StandardSocketOptions#SO_RCVBUF SO_RCVBUF} </td>
- *     <td> The size of the socket receive buffer </td>
- *   </tr>
- *   <tr>
- *     <td> {@link java.net.StandardSocketOptions#SO_REUSEADDR SO_REUSEADDR} </td>
- *     <td> Re-use address </td>
- *   </tr>
- * </table>
- * </blockquote>
- * Additional (implementation specific) options may also be supported.
- *
- * <p> <b>Usage Example:</b>
- * <pre>
- *  final AsynchronousServerSocketChannel listener =
- *      AsynchronousServerSocketChannel.open().bind(new InetSocketAddress(5000));
- *
- *  listener.accept(null, new CompletionHandler&lt;AsynchronousSocketChannel,Void&gt;() {
- *      public void completed(AsynchronousSocketChannel ch, Void att) {
- *          // accept the next connection
- *          listener.accept(null, this);
- *
- *          // handle this connection
- *          handle(ch);
- *      }
- *      public void failed(Throwable exc, Void att) {
- *          ...
- *      }
- *  });
- * </pre>
- *
- * @since 1.7
+ * Java AIO
  */
-
-public abstract class AsynchronousServerSocketChannel
-    implements AsynchronousChannel, NetworkChannel
-{
+public abstract class AsynchronousServerSocketChannel implements AsynchronousChannel, NetworkChannel {
     private final AsynchronousChannelProvider provider;
 
     /**
@@ -137,8 +78,7 @@ public abstract class AsynchronousServerSocketChannel
      * @throws  IOException
      *          If an I/O error occurs
      */
-    public static AsynchronousServerSocketChannel open(AsynchronousChannelGroup group)
-        throws IOException
+    public static AsynchronousServerSocketChannel open(AsynchronousChannelGroup group) throws IOException
     {
         AsynchronousChannelProvider provider = (group == null) ?
             AsynchronousChannelProvider.provider() : group.provider();
@@ -187,9 +127,7 @@ public abstract class AsynchronousServerSocketChannel
      * @throws  ClosedChannelException              {@inheritDoc}
      * @throws  IOException                         {@inheritDoc}
      */
-    public final AsynchronousServerSocketChannel bind(SocketAddress local)
-        throws IOException
-    {
+    public final AsynchronousServerSocketChannel bind(SocketAddress local) throws IOException {
         return bind(local, 0);
     }
 
@@ -228,16 +166,14 @@ public abstract class AsynchronousServerSocketChannel
      * @throws  IOException
      *          If some other I/O error occurs
      */
-    public abstract AsynchronousServerSocketChannel bind(SocketAddress local, int backlog)
-        throws IOException;
+    public abstract AsynchronousServerSocketChannel bind(SocketAddress local, int backlog) throws IOException;
 
     /**
      * @throws  IllegalArgumentException                {@inheritDoc}
      * @throws  ClosedChannelException                  {@inheritDoc}
      * @throws  IOException                             {@inheritDoc}
      */
-    public abstract <T> AsynchronousServerSocketChannel setOption(SocketOption<T> name, T value)
-        throws IOException;
+    public abstract <T> AsynchronousServerSocketChannel setOption(SocketOption<T> name, T value) throws IOException;
 
     /**
      * Accepts a connection.
@@ -282,8 +218,7 @@ public abstract class AsynchronousServerSocketChannel
      * @throws  ShutdownChannelGroupException
      *          If the channel group has terminated
      */
-    public abstract <A> void accept(A attachment,
-                                    CompletionHandler<AsynchronousSocketChannel,? super A> handler);
+    public abstract <A> void accept(A attachment, CompletionHandler<AsynchronousSocketChannel,? super A> handler);
 
     /**
      * Accepts a connection.

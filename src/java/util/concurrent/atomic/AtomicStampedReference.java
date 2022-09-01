@@ -1,54 +1,13 @@
-/*
- * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- */
-
-/*
- *
- *
- *
- *
- *
- * Written by Doug Lea with assistance from members of JCP JSR-166
- * Expert Group and released to the public domain, as explained at
- * http://creativecommons.org/publicdomain/zero/1.0/
- */
-
 package java.util.concurrent.atomic;
 
 /**
- * An {@code AtomicStampedReference} maintains an object reference
- * along with an integer "stamp", that can be updated atomically.
- *
- * <p>Implementation note: This implementation maintains stamped
- * references by creating internal objects representing "boxed"
- * [reference, integer] pairs.
- *
- * @since 1.5
- * @author Doug Lea
- * @param <V> The type of object referred to by this reference
+ * 解决ABA危害
  */
 public class AtomicStampedReference<V> {
 
+    /**
+     * 将元素值和版本号绑定在一起，存储在Pair的reference和stamp
+     */
     private static class Pair<T> {
         final T reference;
         final int stamp;
@@ -122,36 +81,27 @@ public class AtomicStampedReference<V> {
      * @param newStamp the new value for the stamp
      * @return {@code true} if successful
      */
-    public boolean weakCompareAndSet(V   expectedReference,
-                                     V   newReference,
-                                     int expectedStamp,
-                                     int newStamp) {
-        return compareAndSet(expectedReference, newReference,
-                             expectedStamp, newStamp);
+    public boolean weakCompareAndSet(V expectedReference, V   newReference, int expectedStamp, int newStamp) {
+        return compareAndSet(expectedReference, newReference, expectedStamp, newStamp);
     }
 
     /**
-     * Atomically sets the value of both the reference and stamp
-     * to the given update values if the
-     * current reference is {@code ==} to the expected reference
-     * and the current stamp is equal to the expected stamp.
-     *
-     * @param expectedReference the expected value of the reference
-     * @param newReference the new value for the reference
-     * @param expectedStamp the expected value of the stamp
-     * @param newStamp the new value for the stamp
-     * @return {@code true} if successful
+     * （1）如果元素值和版本号都没有变化，并且和新的也相同，返回true
+     * （2）如果元素值和版本号都没有变化，并且和新的不完全相同，就构造一个新的Pair对象并执行CAS更新pair
      */
-    public boolean compareAndSet(V   expectedReference,
-                                 V   newReference,
-                                 int expectedStamp,
-                                 int newStamp) {
+    public boolean compareAndSet(V expectedReference, V newReference, int expectedStamp, int newStamp) {
         Pair<V> current = pair;
-        return
-            expectedReference == current.reference &&
+        // 这里也是利用异或的逻辑执行步骤来进行的，有点绕
+        // a && b (c || d) a b c 是简单的判断，d 是执行方法,这种写法就不用if else 判断了
+               // 引用没变
+        return expectedReference == current.reference &&
+            // 版本号没变
             expectedStamp == current.stamp &&
+                // 新引用等于旧引用
             ((newReference == current.reference &&
+              // 新版本号等于旧版本号
               newStamp == current.stamp) ||
+                    // 构造新的Pair对象并CAS更新
              casPair(current, Pair.of(newReference, newStamp)));
     }
 
@@ -189,17 +139,15 @@ public class AtomicStampedReference<V> {
     }
 
     // Unsafe mechanics
-
     private static final sun.misc.Unsafe UNSAFE = sun.misc.Unsafe.getUnsafe();
-    private static final long pairOffset =
-        objectFieldOffset(UNSAFE, "pair", AtomicStampedReference.class);
+    private static final long pairOffset = objectFieldOffset(UNSAFE, "pair", AtomicStampedReference.class);
 
+    // 调用Unsafe的compareAndSwapObject()方法CAS更新pair的引用为新引用
     private boolean casPair(Pair<V> cmp, Pair<V> val) {
         return UNSAFE.compareAndSwapObject(this, pairOffset, cmp, val);
     }
 
-    static long objectFieldOffset(sun.misc.Unsafe UNSAFE,
-                                  String field, Class<?> klazz) {
+    static long objectFieldOffset(sun.misc.Unsafe UNSAFE, String field, Class<?> klazz) {
         try {
             return UNSAFE.objectFieldOffset(klazz.getDeclaredField(field));
         } catch (NoSuchFieldException e) {

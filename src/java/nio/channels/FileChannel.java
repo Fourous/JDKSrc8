@@ -39,10 +39,7 @@ import java.util.Collections;
 /**
  * 实现零拷贝的主要Java方法，Kafka利用Transfer实现消费
  */
-public abstract class FileChannel
-    extends AbstractInterruptibleChannel
-    implements SeekableByteChannel, GatheringByteChannel, ScatteringByteChannel
-{
+public abstract class FileChannel extends AbstractInterruptibleChannel implements SeekableByteChannel, GatheringByteChannel, ScatteringByteChannel {
     /**
      * Initializes a new instance of this class.
      */
@@ -165,11 +162,7 @@ public abstract class FileChannel
      *
      * @since   1.7
      */
-    public static FileChannel open(Path path,
-                                   Set<? extends OpenOption> options,
-                                   FileAttribute<?>... attrs)
-        throws IOException
-    {
+    public static FileChannel open(Path path, Set<? extends OpenOption> options, FileAttribute<?>... attrs) throws IOException {
         FileSystemProvider provider = path.getFileSystem().provider();
         return provider.newFileChannel(path, options, attrs);
     }
@@ -214,9 +207,7 @@ public abstract class FileChannel
      *
      * @since   1.7
      */
-    public static FileChannel open(Path path, OpenOption... options)
-        throws IOException
-    {
+    public static FileChannel open(Path path, OpenOption... options) throws IOException {
         Set<OpenOption> set = new HashSet<OpenOption>(options.length);
         Collections.addAll(set, options);
         return open(path, set, NO_ATTRIBUTES);
@@ -243,8 +234,7 @@ public abstract class FileChannel
      * read.  Otherwise this method behaves exactly as specified in the {@link
      * ScatteringByteChannel} interface.  </p>
      */
-    public abstract long read(ByteBuffer[] dsts, int offset, int length)
-        throws IOException;
+    public abstract long read(ByteBuffer[] dsts, int offset, int length) throws IOException;
 
     /**
      * Reads a sequence of bytes from this channel into the given buffers.
