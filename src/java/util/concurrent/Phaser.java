@@ -1,38 +1,3 @@
-/*
- * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- */
-
-/*
- *
- *
- *
- *
- *
- * Written by Doug Lea with assistance from members of JCP JSR-166
- * Expert Group and released to the public domain, as explained at
- * http://creativecommons.org/publicdomain/zero/1.0/
- */
-
 package java.util.concurrent;
 
 import java.util.concurrent.TimeUnit;
@@ -41,293 +6,53 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 
 /**
- * A reusable synchronization barrier, similar in functionality to
- * {@link java.util.concurrent.CyclicBarrier CyclicBarrier} and
- * {@link java.util.concurrent.CountDownLatch CountDownLatch}
- * but supporting more flexible usage.
- *
- * <p><b>Registration.</b> Unlike the case for other barriers, the
- * number of parties <em>registered</em> to synchronize on a phaser
- * may vary over time.  Tasks may be registered at any time (using
- * methods {@link #register}, {@link #bulkRegister}, or forms of
- * constructors establishing initial numbers of parties), and
- * optionally deregistered upon any arrival (using {@link
- * #arriveAndDeregister}).  As is the case with most basic
- * synchronization constructs, registration and deregistration affect
- * only internal counts; they do not establish any further internal
- * bookkeeping, so tasks cannot query whether they are registered.
- * (However, you can introduce such bookkeeping by subclassing this
- * class.)
- *
- * <p><b>Synchronization.</b> Like a {@code CyclicBarrier}, a {@code
- * Phaser} may be repeatedly awaited.  Method {@link
- * #arriveAndAwaitAdvance} has effect analogous to {@link
- * java.util.concurrent.CyclicBarrier#await CyclicBarrier.await}. Each
- * generation of a phaser has an associated phase number. The phase
- * number starts at zero, and advances when all parties arrive at the
- * phaser, wrapping around to zero after reaching {@code
- * Integer.MAX_VALUE}. The use of phase numbers enables independent
- * control of actions upon arrival at a phaser and upon awaiting
- * others, via two kinds of methods that may be invoked by any
- * registered party:
- *
- * <ul>
- *
- *   <li> <b>Arrival.</b> Methods {@link #arrive} and
- *       {@link #arriveAndDeregister} record arrival.  These methods
- *       do not block, but return an associated <em>arrival phase
- *       number</em>; that is, the phase number of the phaser to which
- *       the arrival applied. When the final party for a given phase
- *       arrives, an optional action is performed and the phase
- *       advances.  These actions are performed by the party
- *       triggering a phase advance, and are arranged by overriding
- *       method {@link #onAdvance(int, int)}, which also controls
- *       termination. Overriding this method is similar to, but more
- *       flexible than, providing a barrier action to a {@code
- *       CyclicBarrier}.
- *
- *   <li> <b>Waiting.</b> Method {@link #awaitAdvance} requires an
- *       argument indicating an arrival phase number, and returns when
- *       the phaser advances to (or is already at) a different phase.
- *       Unlike similar constructions using {@code CyclicBarrier},
- *       method {@code awaitAdvance} continues to wait even if the
- *       waiting thread is interrupted. Interruptible and timeout
- *       versions are also available, but exceptions encountered while
- *       tasks wait interruptibly or with timeout do not change the
- *       state of the phaser. If necessary, you can perform any
- *       associated recovery within handlers of those exceptions,
- *       often after invoking {@code forceTermination}.  Phasers may
- *       also be used by tasks executing in a {@link ForkJoinPool},
- *       which will ensure sufficient parallelism to execute tasks
- *       when others are blocked waiting for a phase to advance.
- *
- * </ul>
- *
- * <p><b>Termination.</b> A phaser may enter a <em>termination</em>
- * state, that may be checked using method {@link #isTerminated}. Upon
- * termination, all synchronization methods immediately return without
- * waiting for advance, as indicated by a negative return value.
- * Similarly, attempts to register upon termination have no effect.
- * Termination is triggered when an invocation of {@code onAdvance}
- * returns {@code true}. The default implementation returns {@code
- * true} if a deregistration has caused the number of registered
- * parties to become zero.  As illustrated below, when phasers control
- * actions with a fixed number of iterations, it is often convenient
- * to override this method to cause termination when the current phase
- * number reaches a threshold. Method {@link #forceTermination} is
- * also available to abruptly release waiting threads and allow them
- * to terminate.
- *
- * <p><b>Tiering.</b> Phasers may be <em>tiered</em> (i.e.,
- * constructed in tree structures) to reduce contention. Phasers with
- * large numbers of parties that would otherwise experience heavy
- * synchronization contention costs may instead be set up so that
- * groups of sub-phasers share a common parent.  This may greatly
- * increase throughput even though it incurs greater per-operation
- * overhead.
- *
- * <p>In a tree of tiered phasers, registration and deregistration of
- * child phasers with their parent are managed automatically.
- * Whenever the number of registered parties of a child phaser becomes
- * non-zero (as established in the {@link #Phaser(Phaser,int)}
- * constructor, {@link #register}, or {@link #bulkRegister}), the
- * child phaser is registered with its parent.  Whenever the number of
- * registered parties becomes zero as the result of an invocation of
- * {@link #arriveAndDeregister}, the child phaser is deregistered
- * from its parent.
- *
- * <p><b>Monitoring.</b> While synchronization methods may be invoked
- * only by registered parties, the current state of a phaser may be
- * monitored by any caller.  At any given moment there are {@link
- * #getRegisteredParties} parties in total, of which {@link
- * #getArrivedParties} have arrived at the current phase ({@link
- * #getPhase}).  When the remaining ({@link #getUnarrivedParties})
- * parties arrive, the phase advances.  The values returned by these
- * methods may reflect transient states and so are not in general
- * useful for synchronization control.  Method {@link #toString}
- * returns snapshots of these state queries in a form convenient for
- * informal monitoring.
- *
- * <p><b>Sample usages:</b>
- *
- * <p>A {@code Phaser} may be used instead of a {@code CountDownLatch}
- * to control a one-shot action serving a variable number of parties.
- * The typical idiom is for the method setting this up to first
- * register, then start the actions, then deregister, as in:
- *
- *  <pre> {@code
- * void runTasks(List<Runnable> tasks) {
- *   final Phaser phaser = new Phaser(1); // "1" to register self
- *   // create and start threads
- *   for (final Runnable task : tasks) {
- *     phaser.register();
- *     new Thread() {
- *       public void run() {
- *         phaser.arriveAndAwaitAdvance(); // await all creation
- *         task.run();
- *       }
- *     }.start();
- *   }
- *
- *   // allow threads to start and deregister self
- *   phaser.arriveAndDeregister();
- * }}</pre>
- *
- * <p>One way to cause a set of threads to repeatedly perform actions
- * for a given number of iterations is to override {@code onAdvance}:
- *
- *  <pre> {@code
- * void startTasks(List<Runnable> tasks, final int iterations) {
- *   final Phaser phaser = new Phaser() {
- *     protected boolean onAdvance(int phase, int registeredParties) {
- *       return phase >= iterations || registeredParties == 0;
- *     }
- *   };
- *   phaser.register();
- *   for (final Runnable task : tasks) {
- *     phaser.register();
- *     new Thread() {
- *       public void run() {
- *         do {
- *           task.run();
- *           phaser.arriveAndAwaitAdvance();
- *         } while (!phaser.isTerminated());
- *       }
- *     }.start();
- *   }
- *   phaser.arriveAndDeregister(); // deregister self, don't wait
- * }}</pre>
- *
- * If the main task must later await termination, it
- * may re-register and then execute a similar loop:
- *  <pre> {@code
- *   // ...
- *   phaser.register();
- *   while (!phaser.isTerminated())
- *     phaser.arriveAndAwaitAdvance();}</pre>
- *
- * <p>Related constructions may be used to await particular phase numbers
- * in contexts where you are sure that the phase will never wrap around
- * {@code Integer.MAX_VALUE}. For example:
- *
- *  <pre> {@code
- * void awaitPhase(Phaser phaser, int phase) {
- *   int p = phaser.register(); // assumes caller not already registered
- *   while (p < phase) {
- *     if (phaser.isTerminated())
- *       // ... deal with unexpected termination
- *     else
- *       p = phaser.arriveAndAwaitAdvance();
- *   }
- *   phaser.arriveAndDeregister();
- * }}</pre>
- *
- *
- * <p>To create a set of {@code n} tasks using a tree of phasers, you
- * could use code of the following form, assuming a Task class with a
- * constructor accepting a {@code Phaser} that it registers with upon
- * construction. After invocation of {@code build(new Task[n], 0, n,
- * new Phaser())}, these tasks could then be started, for example by
- * submitting to a pool:
- *
- *  <pre> {@code
- * void build(Task[] tasks, int lo, int hi, Phaser ph) {
- *   if (hi - lo > TASKS_PER_PHASER) {
- *     for (int i = lo; i < hi; i += TASKS_PER_PHASER) {
- *       int j = Math.min(i + TASKS_PER_PHASER, hi);
- *       build(tasks, i, j, new Phaser(ph));
- *     }
- *   } else {
- *     for (int i = lo; i < hi; ++i)
- *       tasks[i] = new Task(ph);
- *       // assumes new Task(ph) performs ph.register()
- *   }
- * }}</pre>
- *
- * The best value of {@code TASKS_PER_PHASER} depends mainly on
- * expected synchronization rates. A value as low as four may
- * be appropriate for extremely small per-phase task bodies (thus
- * high rates), or up to hundreds for extremely large ones.
- *
- * <p><b>Implementation notes</b>: This implementation restricts the
- * maximum number of parties to 65535. Attempts to register additional
- * parties result in {@code IllegalStateException}. However, you can and
- * should create tiered phasers to accommodate arbitrarily large sets
- * of participants.
- *
- * @since 1.7
- * @author Doug Lea
+ * 可以将多个任务分阶段执行
  */
 public class Phaser {
-    /*
-     * This class implements an extension of X10 "clocks".  Thanks to
-     * Vijay Saraswat for the idea, and to Vivek Sarkar for
-     * enhancements to extend functionality.
-     */
-
-    /**
-     * Primary state representation, holding four bit-fields:
-     *
-     * unarrived  -- the number of parties yet to hit barrier (bits  0-15)
-     * parties    -- the number of parties to wait            (bits 16-31)
-     * phase      -- the generation of the barrier            (bits 32-62)
-     * terminated -- set if barrier is terminated             (bit  63 / sign)
-     *
-     * Except that a phaser with no registered parties is
-     * distinguished by the otherwise illegal state of having zero
-     * parties and one unarrived parties (encoded as EMPTY below).
-     *
-     * To efficiently maintain atomicity, these values are packed into
-     * a single (atomic) long. Good performance relies on keeping
-     * state decoding and encoding simple, and keeping race windows
-     * short.
-     *
-     * All state updates are performed via CAS except initial
-     * registration of a sub-phaser (i.e., one with a non-null
-     * parent).  In this (relatively rare) case, we use built-in
-     * synchronization to lock while first registering with its
-     * parent.
-     *
-     * The phase of a subphaser is allowed to lag that of its
-     * ancestors until it is actually accessed -- see method
-     * reconcileState.
-     */
+    // 状态变量，用于存储当前阶段phase、参与者数parties、未完成的参与者数unarrived_count
     private volatile long state;
-
+    // 最多可以有多少个参与者，即每个阶段最多有多少个任务
     private static final int  MAX_PARTIES     = 0xffff;
+    // 最多可以有多少阶段
     private static final int  MAX_PHASE       = Integer.MAX_VALUE;
+    // 参与者数量的偏移量
     private static final int  PARTIES_SHIFT   = 16;
+    // 当前阶段的偏移量
     private static final int  PHASE_SHIFT     = 32;
-    private static final int  UNARRIVED_MASK  = 0xffff;      // to mask ints
-    private static final long PARTIES_MASK    = 0xffff0000L; // to mask longs
+    // 未完成的参与者数的掩码，低16位
+    private static final int  UNARRIVED_MASK  = 0xffff;
+    // 参与者数，中间16位
+    private static final long PARTIES_MASK    = 0xffff0000L;
+    // counts的掩码，counts等于参与者数和未完成的参与者数的'|'操作
     private static final long COUNTS_MASK     = 0xffffffffL;
     private static final long TERMINATION_BIT = 1L << 63;
 
-    // some special values
+    // 一次一个参与者完成
     private static final int  ONE_ARRIVAL     = 1;
+    // 增加减少参与者时使用
     private static final int  ONE_PARTY       = 1 << PARTIES_SHIFT;
+    // 减少参与者时使用
     private static final int  ONE_DEREGISTER  = ONE_ARRIVAL|ONE_PARTY;
+    // 没有参与者时使用
     private static final int  EMPTY           = 1;
 
-    // The following unpacking methods are usually manually inlined
-
+    // 用于求未完成参与者数量
     private static int unarrivedOf(long s) {
         int counts = (int)s;
         return (counts == EMPTY) ? 0 : (counts & UNARRIVED_MASK);
     }
-
+    // 用于求参与者数量（中间16位），注意int的位置
     private static int partiesOf(long s) {
         return (int)s >>> PARTIES_SHIFT;
     }
-
+    // 用于求阶段数（高32位），注意int的位置
     private static int phaseOf(long s) {
         return (int)(s >>> PHASE_SHIFT);
     }
-
+    // 已完成参与者的数量
     private static int arrivedOf(long s) {
         int counts = (int)s;
-        return (counts == EMPTY) ? 0 :
-            (counts >>> PARTIES_SHIFT) - (counts & UNARRIVED_MASK);
+        return (counts == EMPTY) ? 0 : (counts >>> PARTIES_SHIFT) - (counts & UNARRIVED_MASK);
     }
 
     /**
@@ -340,12 +65,7 @@ public class Phaser {
      */
     private final Phaser root;
 
-    /**
-     * Heads of Treiber stacks for waiting threads. To eliminate
-     * contention when releasing some threads while adding others, we
-     * use two of them, alternating across even and odd phases.
-     * Subphasers share queues with root to speed up releases.
-     */
+    // 用于存储已完成参与者所在的线程，根据当前阶段的奇偶性选择不同的队列
     private final AtomicReference<QNode> evenQ;
     private final AtomicReference<QNode> oddQ;
 
@@ -419,55 +139,56 @@ public class Phaser {
     }
 
     /**
-     * Implementation of register, bulkRegister
-     *
-     * @param registrations number to add to both parties and
-     * unarrived fields. Must be greater than zero.
+     * （1）增加一个参与者，需要同时增加parties和unarrived两个数值，也就是state的中16位和低16位
+     * （2）如果是第一个参与者，则尝试原子更新state的值，如果成功了就退出
+     * （3）如果不是第一个参与者，则检查是不是在执行onAdvance()，如果是等待onAdvance()执行完成，如果否则尝试原子更新state的值，直到成功退出
+     * （4）等待onAdvance()完成是采用先自旋后进入队列排队的方式等待，减少线程上下文切换
      */
     private int doRegister(int registrations) {
-        // adjustment to state
+        // state应该加的值，注意这里是相当于同时增加parties和unarrived
         long adjust = ((long)registrations << PARTIES_SHIFT) | registrations;
         final Phaser parent = this.parent;
         int phase;
         for (;;) {
+            // state的值
             long s = (parent == null) ? state : reconcileState();
+            // state的低32位，也就是parties和unarrived的值
             int counts = (int)s;
+            // parties的值
             int parties = counts >>> PARTIES_SHIFT;
+            // unarrived的值
             int unarrived = counts & UNARRIVED_MASK;
-            if (registrations > MAX_PARTIES - parties)
-                throw new IllegalStateException(badRegister(s));
+            // 检查是否溢出
+            if (registrations > MAX_PARTIES - parties) throw new IllegalStateException(badRegister(s));
+            // 当前阶段phase
             phase = (int)(s >>> PHASE_SHIFT);
-            if (phase < 0)
-                break;
-            if (counts != EMPTY) {                  // not 1st registration
+            if (phase < 0) break;
+            // 不是第一个参与者
+            if (counts != EMPTY) {
                 if (parent == null || reconcileState() == s) {
-                    if (unarrived == 0)             // wait out advance
-                        root.internalAwaitAdvance(phase, null);
-                    else if (UNSAFE.compareAndSwapLong(this, stateOffset,
-                                                       s, s + adjust))
-                        break;
+                    // unarrived等于0说明当前阶段正在执行onAdvance()方法，等待其执行完毕
+                    if (unarrived == 0) root.internalAwaitAdvance(phase, null);
+                    // 否则就修改state的值，增加adjust，如果成功就跳出循环
+                    else if (UNSAFE.compareAndSwapLong(this, stateOffset, s, s + adjust)) break;
                 }
             }
-            else if (parent == null) {              // 1st root registration
+            // 是第一个参与者
+            else if (parent == null) {
+                // 计算state的值
                 long next = ((long)phase << PHASE_SHIFT) | adjust;
-                if (UNSAFE.compareAndSwapLong(this, stateOffset, s, next))
-                    break;
+                // 修改state的值，如果成功就跳出循环
+                if (UNSAFE.compareAndSwapLong(this, stateOffset, s, next)) break;
             }
             else {
-                synchronized (this) {               // 1st sub registration
-                    if (state == s) {               // recheck under lock
+                // 多层级阶段的处理方式
+                synchronized (this) {
+                    if (state == s) {
                         phase = parent.doRegister(1);
                         if (phase < 0)
                             break;
-                        // finish registration whenever parent registration
-                        // succeeded, even when racing with termination,
-                        // since these are part of the same "transaction".
-                        while (!UNSAFE.compareAndSwapLong
-                               (this, stateOffset, s,
-                                ((long)phase << PHASE_SHIFT) | adjust)) {
+                        while (!UNSAFE.compareAndSwapLong(this, stateOffset, s, ((long)phase << PHASE_SHIFT) | adjust)) {
                             s = state;
                             phase = (int)(root.state >>> PHASE_SHIFT);
-                            // assert (int)s == EMPTY;
                         }
                         break;
                     }
@@ -536,21 +257,9 @@ public class Phaser {
         this(parent, 0);
     }
 
-    /**
-     * Creates a new phaser with the given parent and number of
-     * registered unarrived parties.  When the given parent is non-null
-     * and the given number of parties is greater than zero, this
-     * child phaser is registered with its parent.
-     *
-     * @param parent the parent phaser
-     * @param parties the number of parties required to advance to the
-     * next phase
-     * @throws IllegalArgumentException if parties less than zero
-     * or greater than the maximum number of parties supported
-     */
+    // parent和root，这是用来构造多层级阶段的
     public Phaser(Phaser parent, int parties) {
-        if (parties >>> PARTIES_SHIFT != 0)
-            throw new IllegalArgumentException("Illegal number of parties");
+        if (parties >>> PARTIES_SHIFT != 0) throw new IllegalArgumentException("Illegal number of parties");
         int phase = 0;
         this.parent = parent;
         if (parent != null) {
@@ -566,27 +275,12 @@ public class Phaser {
             this.evenQ = new AtomicReference<QNode>();
             this.oddQ = new AtomicReference<QNode>();
         }
-        this.state = (parties == 0) ? (long)EMPTY :
-            ((long)phase << PHASE_SHIFT) |
-            ((long)parties << PARTIES_SHIFT) |
-            ((long)parties);
+        // 状态变量state的存储分为三段
+        // 高32位存储当前阶段phase，中间16位存储参与者的数量，低16位存储未完成参与者的数量
+        // PHASE_SHIFT 32 PARTIES_SHIFT 16 long 64位
+        this.state = (parties == 0) ? (long)EMPTY : ((long)phase << PHASE_SHIFT) | ((long)parties << PARTIES_SHIFT) | ((long)parties);
     }
-
-    /**
-     * Adds a new unarrived party to this phaser.  If an ongoing
-     * invocation of {@link #onAdvance} is in progress, this method
-     * may await its completion before returning.  If this phaser has
-     * a parent, and this phaser previously had no registered parties,
-     * this child phaser is also registered with its parent. If
-     * this phaser is terminated, the attempt to register has
-     * no effect, and a negative value is returned.
-     *
-     * @return the arrival phase number to which this registration
-     * applied.  If this value is negative, then this phaser has
-     * terminated, in which case registration has no effect.
-     * @throws IllegalStateException if attempting to register more
-     * than the maximum supported number of parties
-     */
+    // 注册，默认是1
     public int register() {
         return doRegister(1);
     }
@@ -655,54 +349,52 @@ public class Phaser {
     }
 
     /**
-     * Arrives at this phaser and awaits others. Equivalent in effect
-     * to {@code awaitAdvance(arrive())}.  If you need to await with
-     * interruption or timeout, you can arrange this with an analogous
-     * construction using one of the other forms of the {@code
-     * awaitAdvance} method.  If instead you need to deregister upon
-     * arrival, use {@code awaitAdvance(arriveAndDeregister())}.
+     * 当前线程当前阶段执行完毕，等待其它线程完成当前阶段
+     * 如果当前线程是该阶段最后一个到达的，则当前线程会执行onAdvance()方法，并唤醒其它线程进入下一个阶段
      *
-     * <p>It is a usage error for an unregistered party to invoke this
-     * method.  However, this error may result in an {@code
-     * IllegalStateException} only upon some subsequent operation on
-     * this phaser, if ever.
-     *
-     * @return the arrival phase number, or the (negative)
-     * {@linkplain #getPhase() current phase} if terminated
-     * @throws IllegalStateException if not terminated and the number
-     * of unarrived parties would become negative
+     * （1）修改state中unarrived部分的值减1；
+     * （2）如果不是最后一个到达的，则调用internalAwaitAdvance()方法自旋或排队等待；
+     * （3）如果是最后一个到达的，则调用onAdvance()方法，然后修改state的值为下一阶段对应的值，并唤醒其它等待的线程；
+     * （4）返回下一阶段的值
      */
     public int arriveAndAwaitAdvance() {
-        // Specialization of doArrive+awaitAdvance eliminating some reads/paths
         final Phaser root = this.root;
         for (;;) {
+            // state的值
             long s = (root == this) ? state : reconcileState();
+            // 当前阶段
             int phase = (int)(s >>> PHASE_SHIFT);
-            if (phase < 0)
-                return phase;
+            if (phase < 0) return phase;
+            // parties和unarrived的值
             int counts = (int)s;
+            // unarrived的值（state的低16位）
             int unarrived = (counts == EMPTY) ? 0 : (counts & UNARRIVED_MASK);
-            if (unarrived <= 0)
-                throw new IllegalStateException(badArrive(s));
-            if (UNSAFE.compareAndSwapLong(this, stateOffset, s,
-                                          s -= ONE_ARRIVAL)) {
-                if (unarrived > 1)
-                    return root.internalAwaitAdvance(phase, null);
-                if (root != this)
-                    return parent.arriveAndAwaitAdvance();
-                long n = s & PARTIES_MASK;  // base of next state
+            if (unarrived <= 0) throw new IllegalStateException(badArrive(s));
+            // 修改state的值
+            if (UNSAFE.compareAndSwapLong(this, stateOffset, s, s -= ONE_ARRIVAL)) {
+                // 如果不是最后一个到达的，则调用internalAwaitAdvance()方法自旋或进入队列等待
+                // 这里是直接返回了 internalAwaitAdvance
+                if (unarrived > 1) return root.internalAwaitAdvance(phase, null);
+                // 到这里说明是最后一个到达的参与者
+                if (root != this) return parent.arriveAndAwaitAdvance();
+                // n只保留了state中parties的部分，也就是中16位
+                long n = s & PARTIES_MASK;
+                // parties的值，即下一次需要到达的参与者数量
                 int nextUnarrived = (int)n >>> PARTIES_SHIFT;
-                if (onAdvance(phase, nextUnarrived))
-                    n |= TERMINATION_BIT;
-                else if (nextUnarrived == 0)
-                    n |= EMPTY;
-                else
-                    n |= nextUnarrived;
+                // 执行onAdvance()方法，返回true表示下一阶段参与者数量为0了，也就是结束了
+                if (onAdvance(phase, nextUnarrived)) n |= TERMINATION_BIT;
+                else if (nextUnarrived == 0) n |= EMPTY;
+                // n 加上unarrived的值
+                else n |= nextUnarrived;
+                // 下一个阶段等待当前阶段加1
                 int nextPhase = (phase + 1) & MAX_PHASE;
+                // n 加上下一阶段的值
                 n |= (long)nextPhase << PHASE_SHIFT;
-                if (!UNSAFE.compareAndSwapLong(this, stateOffset, s, n))
-                    return (int)(state >>> PHASE_SHIFT); // terminated
+                // 修改state的值为n
+                if (!UNSAFE.compareAndSwapLong(this, stateOffset, s, n)) return (int)(state >>> PHASE_SHIFT);
+                // 唤醒其它参与者并进入下一个阶段
                 releaseWaiters(phase);
+                // 返回下一阶段的值
                 return nextPhase;
             }
         }
@@ -959,10 +651,7 @@ public class Phaser {
      * Implementation of toString and string-based error messages
      */
     private String stateToString(long s) {
-        return super.toString() +
-            "[phase = " + phaseOf(s) +
-            " parties = " + partiesOf(s) +
-            " arrived = " + arrivedOf(s) + "]";
+        return super.toString() + "[phase = " + phaseOf(s) + " parties = " + partiesOf(s) + " arrived = " + arrivedOf(s) + "]";
     }
 
     // Waiting mechanics
@@ -1024,67 +713,71 @@ public class Phaser {
      */
     static final int SPINS_PER_ARRIVAL = (NCPU < 2) ? 1 : 1 << 8;
 
-    /**
-     * Possibly blocks and waits for phase to advance unless aborted.
-     * Call only on root phaser.
-     *
-     * @param phase current phase
-     * @param node if non-null, the wait node to track interrupt and timeout;
-     * if null, denotes noninterruptible wait
-     * @return current phase
-     */
+    // 等待onAdvance()方法执行完毕
+    // 原理是先自旋一定次数，如果进入下一个阶段，这个方法直接就返回了
+    // 如果自旋一定次数后还没有进入下一个阶段，则当前线程入队列，等待onAdvance()执行完毕唤醒
     private int internalAwaitAdvance(int phase, QNode node) {
-        // assert root == this;
-        releaseWaiters(phase-1);          // ensure old queue clean
-        boolean queued = false;           // true when node is enqueued
-        int lastUnarrived = 0;            // to increase spins upon change
+        // 保证队列为空
+        releaseWaiters(phase-1);
+        // true证明节点入队
+        boolean queued = false;
+        int lastUnarrived = 0;
+        // 自旋的次数
         int spins = SPINS_PER_ARRIVAL;
         long s;
         int p;
+        // 检查当前阶段是否变化，如果变化了说明进入下一个阶段了，这时候就没有必要自旋了
         while ((p = (int)((s = state) >>> PHASE_SHIFT)) == phase) {
-            if (node == null) {           // spinning in noninterruptible mode
+            // 如果node为空，注册的时候传入的为空
+            if (node == null) {
+                // 未完成的参与者数量
                 int unarrived = (int)s & UNARRIVED_MASK;
-                if (unarrived != lastUnarrived &&
-                    (lastUnarrived = unarrived) < NCPU)
+                // unarrived有变化，增加自旋次数
+                if (unarrived != lastUnarrived && (lastUnarrived = unarrived) < NCPU)
                     spins += SPINS_PER_ARRIVAL;
                 boolean interrupted = Thread.interrupted();
-                if (interrupted || --spins < 0) { // need node to record intr
+                // 自旋次数完了，则新建一个节点
+                if (interrupted || --spins < 0) {
                     node = new QNode(this, phase, false, false, 0L);
                     node.wasInterrupted = interrupted;
                 }
             }
-            else if (node.isReleasable()) // done or aborted
-                break;
-            else if (!queued) {           // push onto queue
+            else if (node.isReleasable()) break;
+            // 节点入队列
+            else if (!queued) {
                 AtomicReference<QNode> head = (phase & 1) == 0 ? evenQ : oddQ;
                 QNode q = node.next = head.get();
-                if ((q == null || q.phase == phase) &&
-                    (int)(state >>> PHASE_SHIFT) == phase) // avoid stale enq
+                if ((q == null || q.phase == phase) && (int)(state >>> PHASE_SHIFT) == phase)
                     queued = head.compareAndSet(q, node);
             }
             else {
                 try {
+                    // 当前线程进入阻塞状态，跟调用LockSupport.park()一样，等待被唤醒
                     ForkJoinPool.managedBlock(node);
                 } catch (InterruptedException ie) {
                     node.wasInterrupted = true;
                 }
             }
         }
-
+        // 到这里说明节点所在线程已经被唤醒了
         if (node != null) {
+            // 置空节点中的线程
             if (node.thread != null)
-                node.thread = null;       // avoid need for unpark()
+                node.thread = null;
             if (node.wasInterrupted && !node.interruptible)
                 Thread.currentThread().interrupt();
             if (p == phase && (p = (int)(state >>> PHASE_SHIFT)) == phase)
-                return abortWait(phase); // possibly clean up on abort
+                return abortWait(phase);
         }
+        // 唤醒当前阶段阻塞着的线程
         releaseWaiters(phase);
         return p;
     }
 
     /**
-     * Wait nodes for Treiber stack representing wait queue
+     * 主要内部类实现了ForkJoinPool.ManagedBlocker
+     * 先完成的参与者放入队列中的节点，这里我们只需要关注 thread和 next两个属性即可
+     * 很明显这是一个单链表，存储着入队的线程
      */
     static final class QNode implements ForkJoinPool.ManagedBlocker {
         final Phaser phaser;
@@ -1145,15 +838,13 @@ public class Phaser {
     }
 
     // Unsafe mechanics
-
     private static final sun.misc.Unsafe UNSAFE;
     private static final long stateOffset;
     static {
         try {
             UNSAFE = sun.misc.Unsafe.getUnsafe();
             Class<?> k = Phaser.class;
-            stateOffset = UNSAFE.objectFieldOffset
-                (k.getDeclaredField("state"));
+            stateOffset = UNSAFE.objectFieldOffset(k.getDeclaredField("state"));
         } catch (Exception e) {
             throw new Error(e);
         }

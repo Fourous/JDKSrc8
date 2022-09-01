@@ -1,4 +1,4 @@
-package com.atomic.sync;
+package com.sync;
 
 import java.util.TreeMap;
 import java.util.concurrent.locks.Lock;

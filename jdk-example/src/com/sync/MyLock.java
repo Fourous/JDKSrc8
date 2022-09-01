@@ -1,4 +1,4 @@
-package com.atomic.sync;
+package com.sync;
 
 import sun.misc.Unsafe;
 

@@ -1,4 +1,4 @@
-package com.atomic.sync;
+package com.sync;
 
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;

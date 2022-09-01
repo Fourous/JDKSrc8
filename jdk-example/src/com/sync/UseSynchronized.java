@@ -1,4 +1,4 @@
-package com.atomic.sync;
+package com.sync;
 
 /**
  * synchronized使用的五种方式

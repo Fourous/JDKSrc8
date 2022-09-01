@@ -1,4 +1,4 @@
-package com.atomic.sync;
+package com.sync;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.IntStream;

@@ -1,4 +1,4 @@
-package com.atomic.sync;
+package com.sync;
 
 /**
  * Synchronized是非公平的
