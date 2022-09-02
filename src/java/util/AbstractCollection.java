@@ -1,63 +1,8 @@
-/*
- * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
- * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- */
-
 package java.util;
 
 /**
- * This class provides a skeletal implementation of the <tt>Collection</tt>
- * interface, to minimize the effort required to implement this interface. <p>
  *
- * To implement an unmodifiable collection, the programmer needs only to
- * extend this class and provide implementations for the <tt>iterator</tt> and
- * <tt>size</tt> methods.  (The iterator returned by the <tt>iterator</tt>
- * method must implement <tt>hasNext</tt> and <tt>next</tt>.)<p>
- *
- * To implement a modifiable collection, the programmer must additionally
- * override this class's <tt>add</tt> method (which otherwise throws an
- * <tt>UnsupportedOperationException</tt>), and the iterator returned by the
- * <tt>iterator</tt> method must additionally implement its <tt>remove</tt>
- * method.<p>
- *
- * The programmer should generally provide a void (no argument) and
- * <tt>Collection</tt> constructor, as per the recommendation in the
- * <tt>Collection</tt> interface specification.<p>
- *
- * The documentation for each non-abstract method in this class describes its
- * implementation in detail.  Each of these methods may be overridden if
- * the collection being implemented admits a more efficient implementation.<p>
- *
- * This class is a member of the
- * <a href="{@docRoot}/../technotes/guides/collections/index.html">
- * Java Collections Framework</a>.
- *
- * @author  Josh Bloch
- * @author  Neal Gafter
- * @see Collection
- * @since 1.2
  */
-
 public abstract class AbstractCollection<E> implements Collection<E> {
     /**
      * Sole constructor.  (For invocation by subclass constructors, typically
@@ -300,7 +245,7 @@ public abstract class AbstractCollection<E> implements Collection<E> {
 
 
     // Bulk Operations
-
+    // 批量操作方法
     /**
      * {@inheritDoc}
      *
@@ -315,8 +260,7 @@ public abstract class AbstractCollection<E> implements Collection<E> {
      */
     public boolean containsAll(Collection<?> c) {
         for (Object e : c)
-            if (!contains(e))
-                return false;
+            if (!contains(e)) return false;
         return true;
     }
 
@@ -415,19 +359,7 @@ public abstract class AbstractCollection<E> implements Collection<E> {
     }
 
     /**
-     * {@inheritDoc}
-     *
-     * <p>This implementation iterates over this collection, removing each
-     * element using the <tt>Iterator.remove</tt> operation.  Most
-     * implementations will probably choose to override this method for
-     * efficiency.
-     *
-     * <p>Note that this implementation will throw an
-     * <tt>UnsupportedOperationException</tt> if the iterator returned by this
-     * collection's <tt>iterator</tt> method does not implement the
-     * <tt>remove</tt> method and this collection is non-empty.
-     *
-     * @throws UnsupportedOperationException {@inheritDoc}
+     * 清除是循环调用remove方法
      */
     public void clear() {
         Iterator<E> it = iterator();
@@ -437,31 +369,16 @@ public abstract class AbstractCollection<E> implements Collection<E> {
         }
     }
 
-
-    //  String conversion
-
-    /**
-     * Returns a string representation of this collection.  The string
-     * representation consists of a list of the collection's elements in the
-     * order they are returned by its iterator, enclosed in square brackets
-     * (<tt>"[]"</tt>).  Adjacent elements are separated by the characters
-     * <tt>", "</tt> (comma and space).  Elements are converted to strings as
-     * by {@link String#valueOf(Object)}.
-     *
-     * @return a string representation of this collection
-     */
     public String toString() {
         Iterator<E> it = iterator();
-        if (! it.hasNext())
-            return "[]";
+        if (! it.hasNext()) return "[]";
 
         StringBuilder sb = new StringBuilder();
         sb.append('[');
         for (;;) {
             E e = it.next();
             sb.append(e == this ? "(this Collection)" : e);
-            if (! it.hasNext())
-                return sb.append(']').toString();
+            if (! it.hasNext()) return sb.append(']').toString();
             sb.append(',').append(' ');
         }
     }

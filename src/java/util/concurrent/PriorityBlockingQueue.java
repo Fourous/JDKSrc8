@@ -1,38 +1,3 @@
-/*
- * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- */
-
-/*
- *
- *
- *
- *
- *
- * Written by Doug Lea with assistance from members of JCP JSR-166
- * Expert Group and released to the public domain, as explained at
- * http://creativecommons.org/publicdomain/zero/1.0/
- */
-
 package java.util.concurrent;
 
 import java.util.concurrent.locks.Condition;
@@ -51,198 +16,58 @@ import java.util.function.Consumer;
 import sun.misc.SharedSecrets;
 
 /**
- * An unbounded {@linkplain BlockingQueue blocking queue} that uses
- * the same ordering rules as class {@link PriorityQueue} and supplies
- * blocking retrieval operations.  While this queue is logically
- * unbounded, attempted additions may fail due to resource exhaustion
- * (causing {@code OutOfMemoryError}). This class does not permit
- * {@code null} elements.  A priority queue relying on {@linkplain
- * Comparable natural ordering} also does not permit insertion of
- * non-comparable objects (doing so results in
- * {@code ClassCastException}).
- *
- * <p>This class and its iterator implement all of the
- * <em>optional</em> methods of the {@link Collection} and {@link
- * Iterator} interfaces.  The Iterator provided in method {@link
- * #iterator()} is <em>not</em> guaranteed to traverse the elements of
- * the PriorityBlockingQueue in any particular order. If you need
- * ordered traversal, consider using
- * {@code Arrays.sort(pq.toArray())}.  Also, method {@code drainTo}
- * can be used to <em>remove</em> some or all elements in priority
- * order and place them in another collection.
- *
- * <p>Operations on this class make no guarantees about the ordering
- * of elements with equal priority. If you need to enforce an
- * ordering, you can define custom classes or comparators that use a
- * secondary key to break ties in primary priority values.  For
- * example, here is a class that applies first-in-first-out
- * tie-breaking to comparable elements. To use it, you would insert a
- * {@code new FIFOEntry(anEntry)} instead of a plain entry object.
- *
- *  <pre> {@code
- * class FIFOEntry<E extends Comparable<? super E>>
- *     implements Comparable<FIFOEntry<E>> {
- *   static final AtomicLong seq = new AtomicLong(0);
- *   final long seqNum;
- *   final E entry;
- *   public FIFOEntry(E entry) {
- *     seqNum = seq.getAndIncrement();
- *     this.entry = entry;
- *   }
- *   public E getEntry() { return entry; }
- *   public int compareTo(FIFOEntry<E> other) {
- *     int res = entry.compareTo(other.entry);
- *     if (res == 0 && other.entry != this.entry)
- *       res = (seqNum < other.seqNum ? -1 : 1);
- *     return res;
- *   }
- * }}</pre>
- *
- * <p>This class is a member of the
- * <a href="{@docRoot}/../technotes/guides/collections/index.html">
- * Java Collections Framework</a>.
- *
- * @since 1.5
- * @author Doug Lea
- * @param <E> the type of elements held in this collection
+ * PriorityBlockingQueue是java并发包下的优先级阻塞队列，它是线程安全的
  */
-@SuppressWarnings("unchecked")
-public class PriorityBlockingQueue<E> extends AbstractQueue<E>
-    implements BlockingQueue<E>, java.io.Serializable {
+public class PriorityBlockingQueue<E> extends AbstractQueue<E> implements BlockingQueue<E>, java.io.Serializable {
     private static final long serialVersionUID = 5595510919245408276L;
 
-    /*
-     * The implementation uses an array-based binary heap, with public
-     * operations protected with a single lock. However, allocation
-     * during resizing uses a simple spinlock (used only while not
-     * holding main lock) in order to allow takes to operate
-     * concurrently with allocation.  This avoids repeated
-     * postponement of waiting consumers and consequent element
-     * build-up. The need to back away from lock during allocation
-     * makes it impossible to simply wrap delegated
-     * java.util.PriorityQueue operations within a lock, as was done
-     * in a previous version of this class. To maintain
-     * interoperability, a plain PriorityQueue is still used during
-     * serialization, which maintains compatibility at the expense of
-     * transiently doubling overhead.
-     */
-
-    /**
-     * Default array capacity.
-     */
+    // 默认容量11
     private static final int DEFAULT_INITIAL_CAPACITY = 11;
 
-    /**
-     * The maximum size of array to allocate.
-     * Some VMs reserve some header words in an array.
-     * Attempts to allocate larger arrays may result in
-     * OutOfMemoryError: Requested array size exceeds VM limit
-     */
+    // 最大数组大小
     private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
 
-    /**
-     * Priority queue represented as a balanced binary heap: the two
-     * children of queue[n] are queue[2*n+1] and queue[2*(n+1)].  The
-     * priority queue is ordered by comparator, or by the elements'
-     * natural ordering, if comparator is null: For each node n in the
-     * heap and each descendant d of n, n <= d.  The element with the
-     * lowest value is in queue[0], assuming the queue is nonempty.
-     */
+    // 存储元素的地方
     private transient Object[] queue;
 
-    /**
-     * The number of elements in the priority queue.
-     */
+    // 元素个数
     private transient int size;
 
-    /**
-     * The comparator, or null if priority queue uses elements'
-     * natural ordering.
-     */
+    // 比较器
     private transient Comparator<? super E> comparator;
 
-    /**
-     * Lock used for all public operations
-     */
+    // 重入锁
     private final ReentrantLock lock;
 
-    /**
-     * Condition for blocking when empty
-     */
+    // 条件锁非空
     private final Condition notEmpty;
 
-    /**
-     * Spinlock for allocation, acquired via CAS.
-     */
+    // 扩容的时候使用的控制变量，CAS更新这个值，谁更新成功了谁扩容，其它线程让出CPU
     private transient volatile int allocationSpinLock;
 
-    /**
-     * A plain PriorityQueue used only for serialization,
-     * to maintain compatibility with previous versions
-     * of this class. Non-null only during serialization/deserialization.
-     */
+    // 不阻塞的优先级队列，非存储元素的地方，仅用于序列化/反序列化时
     private PriorityQueue<E> q;
 
-    /**
-     * Creates a {@code PriorityBlockingQueue} with the default
-     * initial capacity (11) that orders its elements according to
-     * their {@linkplain Comparable natural ordering}.
-     */
+    /** 构造函数4个
+     * 可以控制容量，比较器
+     *
+     * **/
     public PriorityBlockingQueue() {
         this(DEFAULT_INITIAL_CAPACITY, null);
     }
 
-    /**
-     * Creates a {@code PriorityBlockingQueue} with the specified
-     * initial capacity that orders its elements according to their
-     * {@linkplain Comparable natural ordering}.
-     *
-     * @param initialCapacity the initial capacity for this priority queue
-     * @throws IllegalArgumentException if {@code initialCapacity} is less
-     *         than 1
-     */
     public PriorityBlockingQueue(int initialCapacity) {
         this(initialCapacity, null);
     }
 
-    /**
-     * Creates a {@code PriorityBlockingQueue} with the specified initial
-     * capacity that orders its elements according to the specified
-     * comparator.
-     *
-     * @param initialCapacity the initial capacity for this priority queue
-     * @param  comparator the comparator that will be used to order this
-     *         priority queue.  If {@code null}, the {@linkplain Comparable
-     *         natural ordering} of the elements will be used.
-     * @throws IllegalArgumentException if {@code initialCapacity} is less
-     *         than 1
-     */
-    public PriorityBlockingQueue(int initialCapacity,
-                                 Comparator<? super E> comparator) {
-        if (initialCapacity < 1)
-            throw new IllegalArgumentException();
+    public PriorityBlockingQueue(int initialCapacity, Comparator<? super E> comparator) {
+        if (initialCapacity < 1) throw new IllegalArgumentException();
         this.lock = new ReentrantLock();
         this.notEmpty = lock.newCondition();
         this.comparator = comparator;
         this.queue = new Object[initialCapacity];
     }
 
-    /**
-     * Creates a {@code PriorityBlockingQueue} containing the elements
-     * in the specified collection.  If the specified collection is a
-     * {@link SortedSet} or a {@link PriorityQueue}, this
-     * priority queue will be ordered according to the same ordering.
-     * Otherwise, this priority queue will be ordered according to the
-     * {@linkplain Comparable natural ordering} of its elements.
-     *
-     * @param  c the collection whose elements are to be placed
-     *         into this priority queue
-     * @throws ClassCastException if elements of the specified collection
-     *         cannot be compared to one another according to the priority
-     *         queue's ordering
-     * @throws NullPointerException if the specified collection or any
-     *         of its elements are null
-     */
     public PriorityBlockingQueue(Collection<? extends E> c) {
         this.lock = new ReentrantLock();
         this.notEmpty = lock.newCondition();
@@ -254,12 +79,10 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
             heapify = false;
         }
         else if (c instanceof PriorityBlockingQueue<?>) {
-            PriorityBlockingQueue<? extends E> pq =
-                (PriorityBlockingQueue<? extends E>) c;
+            PriorityBlockingQueue<? extends E> pq = (PriorityBlockingQueue<? extends E>) c;
             this.comparator = (Comparator<? super E>) pq.comparator();
             screen = false;
-            if (pq.getClass() == PriorityBlockingQueue.class) // exact match
-                heapify = false;
+            if (pq.getClass() == PriorityBlockingQueue.class) heapify = false;
         }
         Object[] a = c.toArray();
         int n = a.length;
@@ -277,142 +100,126 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Tries to grow array to accommodate at least one more element
-     * (but normally expand by about 50%), giving up (allowing retry)
-     * on contention (which we expect to be rare). Call only while
-     * holding lock.
-     *
-     * @param array the heap array
-     * @param oldCap the length of the array
+     * （1）解锁，解除offer()方法中加的锁；
+     * （2）使用allocationSpinLock变量的CAS操作来控制扩容的过程
+     * （3）旧容量小于64则翻倍，旧容量大于64则增加一半
+     * （4）创建新数组
+     * （5）修改allocationSpinLock为0，相当于解锁
+     * （6）其它线程在扩容的过程中要让出CPU
+     * （7）再次加锁
+     * （8）新数组创建成功，把旧数组元素拷贝过来，并返回到offer()方法中继续添加元素操作
      */
     private void tryGrow(Object[] array, int oldCap) {
-        lock.unlock(); // must release and then re-acquire main lock
+        // 先释放锁，因为是从offer()方法的锁内部过来的
+        // 这里先释放锁，使用allocationSpinLock变量控制扩容的过程
+        // 防止阻塞的线程过多
+        lock.unlock();
         Object[] newArray = null;
-        if (allocationSpinLock == 0 &&
-            UNSAFE.compareAndSwapInt(this, allocationSpinLockOffset,
-                                     0, 1)) {
+        // CAS更新allocationSpinLock变量为1的线程获得扩容资格
+        if (allocationSpinLock == 0 && UNSAFE.compareAndSwapInt(this, allocationSpinLockOffset, 0, 1)) {
             try {
-                int newCap = oldCap + ((oldCap < 64) ?
-                                       (oldCap + 2) : // grow faster if small
-                                       (oldCap >> 1));
-                if (newCap - MAX_ARRAY_SIZE > 0) {    // possible overflow
+                // 旧容量小于64则翻倍，旧容量大于64则增加一半
+                int newCap = oldCap + ((oldCap < 64) ? (oldCap + 2) : (oldCap >> 1));
+                // 判断新容量是否溢出
+                if (newCap - MAX_ARRAY_SIZE > 0) {
                     int minCap = oldCap + 1;
-                    if (minCap < 0 || minCap > MAX_ARRAY_SIZE)
-                        throw new OutOfMemoryError();
+                    if (minCap < 0 || minCap > MAX_ARRAY_SIZE) throw new OutOfMemoryError();
                     newCap = MAX_ARRAY_SIZE;
                 }
-                if (newCap > oldCap && queue == array)
-                    newArray = new Object[newCap];
+                // 创建新数组
+                if (newCap > oldCap && queue == array) newArray = new Object[newCap];
             } finally {
+                // 相当于解锁
                 allocationSpinLock = 0;
             }
         }
-        if (newArray == null) // back off if another thread is allocating
-            Thread.yield();
+        // 只有进入了上面条件的才会满足这个条件
+        // 意思是让其它线程让出CPU
+        if (newArray == null) Thread.yield();
+        // 再次加锁 因为要进行拷贝了
         lock.lock();
+        // 判断新数组创建成功并且旧数组没有被替换过
         if (newArray != null && queue == array) {
+            // 队列赋值为新数组 直接替换
             queue = newArray;
+            // 并拷贝旧数组元素到新数组中
             System.arraycopy(array, 0, newArray, 0, oldCap);
         }
     }
 
-    /**
-     * Mechanics for poll().  Call only while holding lock.
-     */
+    // 出队
     private E dequeue() {
+        // size -1
         int n = size - 1;
-        if (n < 0)
-            return null;
+        // 数组元素不足，返回null
+        if (n < 0) return null;
         else {
             Object[] array = queue;
+            // 弹出堆顶元素
             E result = (E) array[0];
+            // 把堆尾元素拿到堆顶
             E x = (E) array[n];
             array[n] = null;
             Comparator<? super E> cmp = comparator;
-            if (cmp == null)
-                siftDownComparable(0, x, array, n);
-            else
-                siftDownUsingComparator(0, x, array, n, cmp);
+            // 并做自上而下的堆化
+            if (cmp == null) siftDownComparable(0, x, array, n);
+            else siftDownUsingComparator(0, x, array, n, cmp);
             size = n;
             return result;
         }
     }
 
-    /**
-     * Inserts item x at position k, maintaining heap invariant by
-     * promoting x up the tree until it is greater than or equal to
-     * its parent, or is the root.
-     *
-     * To simplify and speed up coercions and comparisons. the
-     * Comparable and Comparator versions are separated into different
-     * methods that are otherwise identical. (Similarly for siftDown.)
-     * These methods are static, with heap state as arguments, to
-     * simplify use in light of possible comparator exceptions.
-     *
-     * @param k the position to fill
-     * @param x the item to insert
-     * @param array the heap array
-     */
+    /** 自下而上堆化，也就是加入元素时候进行堆化 **/
     private static <T> void siftUpComparable(int k, T x, Object[] array) {
         Comparable<? super T> key = (Comparable<? super T>) x;
         while (k > 0) {
             int parent = (k - 1) >>> 1;
             Object e = array[parent];
-            if (key.compareTo((T) e) >= 0)
-                break;
+            if (key.compareTo((T) e) >= 0) break;
             array[k] = e;
             k = parent;
         }
         array[k] = key;
     }
 
-    private static <T> void siftUpUsingComparator(int k, T x, Object[] array,
-                                       Comparator<? super T> cmp) {
+    private static <T> void siftUpUsingComparator(int k, T x, Object[] array, Comparator<? super T> cmp) {
         while (k > 0) {
             int parent = (k - 1) >>> 1;
             Object e = array[parent];
-            if (cmp.compare(x, (T) e) >= 0)
-                break;
+            if (cmp.compare(x, (T) e) >= 0) break;
             array[k] = e;
             k = parent;
         }
         array[k] = x;
     }
 
-    /**
-     * Inserts item x at position k, maintaining heap invariant by
-     * demoting x down the tree repeatedly until it is less than or
-     * equal to its children or is a leaf.
-     *
-     * @param k the position to fill
-     * @param x the item to insert
-     * @param array the heap array
-     * @param n heap size
-     */
-    private static <T> void siftDownComparable(int k, T x, Object[] array,
-                                               int n) {
+    /** 自上而下进行堆化，也就是出队进行堆化 **/
+    private static <T> void siftDownComparable(int k, T x, Object[] array, int n) {
         if (n > 0) {
             Comparable<? super T> key = (Comparable<? super T>)x;
-            int half = n >>> 1;           // loop while a non-leaf
+            int half = n >>> 1;
+            // 只需要遍历到叶子节点就够了
             while (k < half) {
-                int child = (k << 1) + 1; // assume left child is least
+                // 左子节点
+                int child = (k << 1) + 1;
+                // 左子节点的值
                 Object c = array[child];
+                // 右子节点
                 int right = child + 1;
-                if (right < n &&
-                    ((Comparable<? super T>) c).compareTo((T) array[right]) > 0)
-                    c = array[child = right];
-                if (key.compareTo((T) c) <= 0)
-                    break;
+                // 取左右子节点中最小的值
+                if (right < n && ((Comparable<? super T>) c).compareTo((T) array[right]) > 0) c = array[child = right];
+                // key如果比左右子节点都小，则堆化结束
+                if (key.compareTo((T) c) <= 0) break;
+                // 否则，交换key与左右子节点中最小的节点的位置
                 array[k] = c;
                 k = child;
             }
+            // 找到了放元素的位置，放置元素
             array[k] = key;
         }
     }
 
-    private static <T> void siftDownUsingComparator(int k, T x, Object[] array,
-                                                    int n,
-                                                    Comparator<? super T> cmp) {
+    private static <T> void siftDownUsingComparator(int k, T x, Object[] array, int n, Comparator<? super T> cmp) {
         if (n > 0) {
             int half = n >>> 1;
             while (k < half) {
@@ -450,46 +257,30 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Inserts the specified element into this priority queue.
-     *
-     * @param e the element to add
-     * @return {@code true} (as specified by {@link Collection#add})
-     * @throws ClassCastException if the specified element cannot be compared
-     *         with elements currently in the priority queue according to the
-     *         priority queue's ordering
-     * @throws NullPointerException if the specified element is null
+     * 队列添加元素基本也是四个方法 add offer offer_time put
      */
     public boolean add(E e) {
         return offer(e);
     }
 
-    /**
-     * Inserts the specified element into this priority queue.
-     * As the queue is unbounded, this method will never return {@code false}.
-     *
-     * @param e the element to add
-     * @return {@code true} (as specified by {@link Queue#offer})
-     * @throws ClassCastException if the specified element cannot be compared
-     *         with elements currently in the priority queue according to the
-     *         priority queue's ordering
-     * @throws NullPointerException if the specified element is null
-     */
+    // 加锁 扩容 堆化 唤醒notEmpty条件 解锁
     public boolean offer(E e) {
-        if (e == null)
-            throw new NullPointerException();
+        if (e == null) throw new NullPointerException();
         final ReentrantLock lock = this.lock;
         lock.lock();
         int n, cap;
         Object[] array;
+        // 判断是否需要扩容，即元素个数达到了数组容量
         while ((n = size) >= (cap = (array = queue).length))
             tryGrow(array, cap);
         try {
             Comparator<? super E> cmp = comparator;
-            if (cmp == null)
-                siftUpComparable(n, e, array);
-            else
-                siftUpUsingComparator(n, e, array, cmp);
+            // 根据是否有比较器选择不同的方法
+            if (cmp == null) siftUpComparable(n, e, array);
+            else siftUpUsingComparator(n, e, array, cmp);
+            // 插入元素完毕，元素个数加1
             size = n + 1;
+            // 唤醒notEmpty条件
             notEmpty.signal();
         } finally {
             lock.unlock();
@@ -497,39 +288,14 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
         return true;
     }
 
-    /**
-     * Inserts the specified element into this priority queue.
-     * As the queue is unbounded, this method will never block.
-     *
-     * @param e the element to add
-     * @throws ClassCastException if the specified element cannot be compared
-     *         with elements currently in the priority queue according to the
-     *         priority queue's ordering
-     * @throws NullPointerException if the specified element is null
-     */
-    public void put(E e) {
-        offer(e); // never need to block
-    }
+    public void put(E e) {offer(e);}
+
+    // 传入时间直接就没用
+    public boolean offer(E e, long timeout, TimeUnit unit) {return offer(e);}
 
     /**
-     * Inserts the specified element into this priority queue.
-     * As the queue is unbounded, this method will never block or
-     * return {@code false}.
-     *
-     * @param e the element to add
-     * @param timeout This parameter is ignored as the method never blocks
-     * @param unit This parameter is ignored as the method never blocks
-     * @return {@code true} (as specified by
-     *  {@link BlockingQueue#offer(Object,long,TimeUnit) BlockingQueue.offer})
-     * @throws ClassCastException if the specified element cannot be compared
-     *         with elements currently in the priority queue according to the
-     *         priority queue's ordering
-     * @throws NullPointerException if the specified element is null
-     */
-    public boolean offer(E e, long timeout, TimeUnit unit) {
-        return offer(e); // never need to block
-    }
-
+     *  出队也是四个方法 poll take poll_time peek
+     **/
     public E poll() {
         final ReentrantLock lock = this.lock;
         lock.lock();
@@ -540,11 +306,20 @@ public class PriorityBlockingQueue<E> extends AbstractQueue<E>
         }
     }
 
+    /**
+     * （1）加锁；
+     * （2）判断是否出队成功，未成功就阻塞在notEmpty条件上；
+     * （3）出队时弹出堆顶元素，并把堆尾元素拿到堆顶；
+     * （4）再做自上而下的堆化；
+     * （5）解锁
+     */
     public E take() throws InterruptedException {
         final ReentrantLock lock = this.lock;
         lock.lockInterruptibly();
         E result;
         try {
+            // 队列没有元素，就阻塞在notEmpty条件上
+            // 出队成功，就跳出这个循环
             while ( (result = dequeue()) == null)
                 notEmpty.await();
         } finally {

@@ -1,38 +1,3 @@
-/*
- * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- */
-
-/*
- *
- *
- *
- *
- *
- * Written by Doug Lea with assistance from members of JCP JSR-166
- * Expert Group and released to the public domain, as explained at
- * http://creativecommons.org/publicdomain/zero/1.0/
- */
-
 package java.util.concurrent;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -45,75 +10,31 @@ import java.util.Spliterators;
 import java.util.Spliterator;
 
 /**
- * A bounded {@linkplain BlockingQueue blocking queue} backed by an
- * array.  This queue orders elements FIFO (first-in-first-out).  The
- * <em>head</em> of the queue is that element that has been on the
- * queue the longest time.  The <em>tail</em> of the queue is that
- * element that has been on the queue the shortest time. New elements
- * are inserted at the tail of the queue, and the queue retrieval
- * operations obtain elements at the head of the queue.
- *
- * <p>This is a classic &quot;bounded buffer&quot;, in which a
- * fixed-sized array holds elements inserted by producers and
- * extracted by consumers.  Once created, the capacity cannot be
- * changed.  Attempts to {@code put} an element into a full queue
- * will result in the operation blocking; attempts to {@code take} an
- * element from an empty queue will similarly block.
- *
- * <p>This class supports an optional fairness policy for ordering
- * waiting producer and consumer threads.  By default, this ordering
- * is not guaranteed. However, a queue constructed with fairness set
- * to {@code true} grants threads access in FIFO order. Fairness
- * generally decreases throughput but reduces variability and avoids
- * starvation.
- *
- * <p>This class and its iterator implement all of the
- * <em>optional</em> methods of the {@link Collection} and {@link
- * Iterator} interfaces.
- *
- * <p>This class is a member of the
- * <a href="{@docRoot}/../technotes/guides/collections/index.html">
- * Java Collections Framework</a>.
- *
- * @since 1.5
- * @author Doug Lea
- * @param <E> the type of elements held in this collection
+ * 出队入队用了同一把锁可以看到，效率不会太高
+ * 判空判满用了两个Condition
  */
-public class ArrayBlockingQueue<E> extends AbstractQueue<E>
-        implements BlockingQueue<E>, java.io.Serializable {
-
-    /**
-     * Serialization ID. This class relies on default serialization
-     * even for the items array, which is default-serialized, even if
-     * it is empty. Otherwise it could not be declared final, which is
-     * necessary here.
-     */
+public class ArrayBlockingQueue<E> extends AbstractQueue<E> implements BlockingQueue<E>, java.io.Serializable {
     private static final long serialVersionUID = -817911632652898426L;
 
-    /** The queued items */
+    // 使用数组存储元素
     final Object[] items;
 
-    /** items index for next take, poll, peek or remove */
+    // 取元素的指针
     int takeIndex;
 
-    /** items index for next put, offer, or add */
+    // 放元素的指针
     int putIndex;
 
-    /** Number of elements in the queue */
+    // 元素数量
     int count;
 
-    /*
-     * Concurrency control uses the classic two-condition algorithm
-     * found in any textbook.
-     */
-
-    /** Main lock guarding all access */
+    // 保证并发访问的锁
     final ReentrantLock lock;
 
-    /** Condition for waiting takes */
+    // 非空条件
     private final Condition notEmpty;
 
-    /** Condition for waiting puts */
+    // 非满条件
     private final Condition notFull;
 
     /**
@@ -150,37 +71,33 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
             throw new NullPointerException();
     }
 
-    /**
-     * Inserts element at current put position, advances, and signals.
-     * Call only when holding lock.
-     */
+    // 入队，放指针循环使用数组来存储元素
     private void enqueue(E x) {
-        // assert lock.getHoldCount() == 1;
-        // assert items[putIndex] == null;
         final Object[] items = this.items;
+        // 把元素直接放在放指针的位置上
         items[putIndex] = x;
+        // 如果放指针到数组尽头了，就返回头部
         if (++putIndex == items.length)
             putIndex = 0;
         count++;
+        // 唤醒notEmpty，因为入队了一个元素，所以肯定不为空了
         notEmpty.signal();
     }
 
-    /**
-     * Extracts element at current take position, advances, and signals.
-     * Call only when holding lock.
-     */
+   // 出队，取指针循环从数组中取元素
     private E dequeue() {
-        // assert lock.getHoldCount() == 1;
-        // assert items[takeIndex] != null;
         final Object[] items = this.items;
+        // 取指针位置的元素
         @SuppressWarnings("unchecked")
         E x = (E) items[takeIndex];
+        // 把取指针位置设为null
         items[takeIndex] = null;
+        // 取指针前移，如果数组到头了就返回数组前端循环利用
         if (++takeIndex == items.length)
             takeIndex = 0;
         count--;
-        if (itrs != null)
-            itrs.elementDequeued();
+        if (itrs != null) itrs.elementDequeued();
+        // 唤醒notFull条件
         notFull.signal();
         return x;
     }
@@ -228,54 +145,23 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         notFull.signal();
     }
 
-    /**
-     * Creates an {@code ArrayBlockingQueue} with the given (fixed)
-     * capacity and default access policy.
-     *
-     * @param capacity the capacity of this queue
-     * @throws IllegalArgumentException if {@code capacity < 1}
-     */
+    /****************************************** 构造方法  *********************************************/
+
     public ArrayBlockingQueue(int capacity) {
         this(capacity, false);
     }
-
-    /**
-     * Creates an {@code ArrayBlockingQueue} with the given (fixed)
-     * capacity and the specified access policy.
-     *
-     * @param capacity the capacity of this queue
-     * @param fair if {@code true} then queue accesses for threads blocked
-     *        on insertion or removal, are processed in FIFO order;
-     *        if {@code false} the access order is unspecified.
-     * @throws IllegalArgumentException if {@code capacity < 1}
-     */
+    // 构造方法
     public ArrayBlockingQueue(int capacity, boolean fair) {
-        if (capacity <= 0)
-            throw new IllegalArgumentException();
+        if (capacity <= 0) throw new IllegalArgumentException();
+        // 初始化数组
         this.items = new Object[capacity];
+        // 创建重入锁-非公平及两个条件
         lock = new ReentrantLock(fair);
         notEmpty = lock.newCondition();
         notFull =  lock.newCondition();
     }
 
-    /**
-     * Creates an {@code ArrayBlockingQueue} with the given (fixed)
-     * capacity, the specified access policy and initially containing the
-     * elements of the given collection,
-     * added in traversal order of the collection's iterator.
-     *
-     * @param capacity the capacity of this queue
-     * @param fair if {@code true} then queue accesses for threads blocked
-     *        on insertion or removal, are processed in FIFO order;
-     *        if {@code false} the access order is unspecified.
-     * @param c the collection of elements to initially contain
-     * @throws IllegalArgumentException if {@code capacity} is less than
-     *         {@code c.size()}, or less than 1.
-     * @throws NullPointerException if the specified collection or any
-     *         of its elements are null
-     */
-    public ArrayBlockingQueue(int capacity, boolean fair,
-                              Collection<? extends E> c) {
+    public ArrayBlockingQueue(int capacity, boolean fair, Collection<? extends E> c) {
         this(capacity, fair);
 
         final ReentrantLock lock = this.lock;
@@ -298,84 +184,53 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
     }
 
     /**
-     * Inserts the specified element at the tail of this queue if it is
-     * possible to do so immediately without exceeding the queue's capacity,
-     * returning {@code true} upon success and throwing an
-     * {@code IllegalStateException} if this queue is full.
-     *
-     * @param e the element to add
-     * @return {@code true} (as specified by {@link Collection#add})
-     * @throws IllegalStateException if this queue is full
-     * @throws NullPointerException if the specified element is null
+     * 入队四个方法
+     * 1. add 添加元素，队列满抛异常
+     * 2. offer 添加元素，队列满返回false
+     * 3. put 添加元素，队列满阻塞等待
+     * 4. offer带时间，队列满则先等待一段时间，时间过了则返回false
      */
+    // 添加元素，如果队列满了则抛出异常
     public boolean add(E e) {
+        // 调用父类的构造方法
+        // abstractQueue 调用offer(e)如果成功返回true，如果失败抛出异常
         return super.add(e);
     }
 
-    /**
-     * Inserts the specified element at the tail of this queue if it is
-     * possible to do so immediately without exceeding the queue's capacity,
-     * returning {@code true} upon success and {@code false} if this queue
-     * is full.  This method is generally preferable to method {@link #add},
-     * which can fail to insert an element only by throwing an exception.
-     *
-     * @throws NullPointerException if the specified element is null
-     */
+    // 添加元素，如果队列满了则返回false
     public boolean offer(E e) {
+        // 实现父类接口，也就是add元素也会调用到这里
+        // 非空
         checkNotNull(e);
         final ReentrantLock lock = this.lock;
+        // 加锁
         lock.lock();
         try {
-            if (count == items.length)
-                return false;
+            // 如果数组满了就返回false
+            if (count == items.length) return false;
             else {
+                // 如果数组没满就调用入队方法并返回true
                 enqueue(e);
                 return true;
             }
         } finally {
+            // 解锁
             lock.unlock();
         }
     }
 
-    /**
-     * Inserts the specified element at the tail of this queue, waiting
-     * for space to become available if the queue is full.
-     *
-     * @throws InterruptedException {@inheritDoc}
-     * @throws NullPointerException {@inheritDoc}
-     */
-    public void put(E e) throws InterruptedException {
-        checkNotNull(e);
-        final ReentrantLock lock = this.lock;
-        lock.lockInterruptibly();
-        try {
-            while (count == items.length)
-                notFull.await();
-            enqueue(e);
-        } finally {
-            lock.unlock();
-        }
-    }
 
-    /**
-     * Inserts the specified element at the tail of this queue, waiting
-     * up to the specified wait time for space to become available if
-     * the queue is full.
-     *
-     * @throws InterruptedException {@inheritDoc}
-     * @throws NullPointerException {@inheritDoc}
-     */
-    public boolean offer(E e, long timeout, TimeUnit unit)
-        throws InterruptedException {
-
+    // 区别，加锁是interrupt的，其次带时间阻塞
+    public boolean offer(E e, long timeout, TimeUnit unit) throws InterruptedException {
         checkNotNull(e);
         long nanos = unit.toNanos(timeout);
         final ReentrantLock lock = this.lock;
         lock.lockInterruptibly();
         try {
             while (count == items.length) {
-                if (nanos <= 0)
-                    return false;
+                // 如果数组满了，就阻塞nanos纳秒
+                if (nanos <= 0) return false;
+                // 可以看到阻塞nanos时间
                 nanos = notFull.awaitNanos(nanos);
             }
             enqueue(e);
@@ -385,10 +240,44 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         }
     }
 
+    // 如果队列满了则使用notFull等待
+    public void put(E e) throws InterruptedException {
+        checkNotNull(e);
+        // 加锁，如果线程中断了抛出异常
+        final ReentrantLock lock = this.lock;
+        // 可以看到，add是不带这个interrupt的
+        lock.lockInterruptibly();
+        try {
+            // 如果数组满了，使用notFull等待
+            // notFull等待的意思是说现在队列满了
+            // 只有取走一个元素后，队列才不满
+            // 然后唤醒notFull，然后继续现在的逻辑
+            // 这里之所以使用while而不是if
+            // 是因为有可能多个线程阻塞在lock上
+            // 即使唤醒了可能其它线程先一步修改了队列又变成满的了
+            // 这时候需要再次等待
+            while (count == items.length)
+                notFull.await();
+            // 入队
+            enqueue(e);
+        } finally {
+            // 解锁
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 出队四个方法
+     * 1. remove 如果队列为空则抛出异常（在AbstractQueue定义，子类也可以调用到
+     * 2. poll 如果队列为空则返回null
+     * 3. poll带时间 如果队列为空则阻塞等待一段时间后如果还为空就返回null
+     * 4. take 如果队列为空则阻塞等待在条件notEmpty上
+     */
     public E poll() {
         final ReentrantLock lock = this.lock;
         lock.lock();
         try {
+            // 如果队列没有元素则返回null，否则出队
             return (count == 0) ? null : dequeue();
         } finally {
             lock.unlock();
@@ -399,8 +288,8 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         final ReentrantLock lock = this.lock;
         lock.lockInterruptibly();
         try {
-            while (count == 0)
-                notEmpty.await();
+            // 如果队列无元素，则阻塞等待在条件notEmpty上
+            while (count == 0) notEmpty.await();
             return dequeue();
         } finally {
             lock.unlock();
@@ -412,9 +301,10 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         final ReentrantLock lock = this.lock;
         lock.lockInterruptibly();
         try {
+            // 如果队列无元素，则阻塞等待nanos纳秒
+            // 如果下一次这个线程获得了锁但队列依然无元素且已超时就返回null
             while (count == 0) {
-                if (nanos <= 0)
-                    return null;
+                if (nanos <= 0) return null;
                 nanos = notEmpty.awaitNanos(nanos);
             }
             return dequeue();
@@ -433,13 +323,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         }
     }
 
-    // this doc comment is overridden to remove the reference to collections
-    // greater in size than Integer.MAX_VALUE
-    /**
-     * Returns the number of elements in this queue.
-     *
-     * @return the number of elements in this queue
-     */
+    // 获取size是加锁的
     public int size() {
         final ReentrantLock lock = this.lock;
         lock.lock();
@@ -766,62 +650,9 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         return new Itr();
     }
 
-    /**
-     * Shared data between iterators and their queue, allowing queue
-     * modifications to update iterators when elements are removed.
-     *
-     * This adds a lot of complexity for the sake of correctly
-     * handling some uncommon operations, but the combination of
-     * circular-arrays and supporting interior removes (i.e., those
-     * not at head) would cause iterators to sometimes lose their
-     * places and/or (re)report elements they shouldn't.  To avoid
-     * this, when a queue has one or more iterators, it keeps iterator
-     * state consistent by:
-     *
-     * (1) keeping track of the number of "cycles", that is, the
-     *     number of times takeIndex has wrapped around to 0.
-     * (2) notifying all iterators via the callback removedAt whenever
-     *     an interior element is removed (and thus other elements may
-     *     be shifted).
-     *
-     * These suffice to eliminate iterator inconsistencies, but
-     * unfortunately add the secondary responsibility of maintaining
-     * the list of iterators.  We track all active iterators in a
-     * simple linked list (accessed only when the queue's lock is
-     * held) of weak references to Itr.  The list is cleaned up using
-     * 3 different mechanisms:
-     *
-     * (1) Whenever a new iterator is created, do some O(1) checking for
-     *     stale list elements.
-     *
-     * (2) Whenever takeIndex wraps around to 0, check for iterators
-     *     that have been unused for more than one wrap-around cycle.
-     *
-     * (3) Whenever the queue becomes empty, all iterators are notified
-     *     and this entire data structure is discarded.
-     *
-     * So in addition to the removedAt callback that is necessary for
-     * correctness, iterators have the shutdown and takeIndexWrapped
-     * callbacks that help remove stale iterators from the list.
-     *
-     * Whenever a list element is examined, it is expunged if either
-     * the GC has determined that the iterator is discarded, or if the
-     * iterator reports that it is "detached" (does not need any
-     * further state updates).  Overhead is maximal when takeIndex
-     * never advances, iterators are discarded before they are
-     * exhausted, and all removals are interior removes, in which case
-     * all stale iterators are discovered by the GC.  But even in this
-     * case we don't increase the amortized complexity.
-     *
-     * Care must be taken to keep list sweeping methods from
-     * reentrantly invoking another such method, causing subtle
-     * corruption bugs.
-     */
+    // 内部类定义Itrs
     class Itrs {
-
-        /**
-         * Node in a linked list of weak iterator references.
-         */
+        // 虚引用 而且典型的单链表结构
         private class Node extends WeakReference<Itr> {
             Node next;
 
@@ -1003,24 +834,7 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
         }
     }
 
-    /**
-     * Iterator for ArrayBlockingQueue.
-     *
-     * To maintain weak consistency with respect to puts and takes, we
-     * read ahead one slot, so as to not report hasNext true but then
-     * not have an element to return.
-     *
-     * We switch into "detached" mode (allowing prompt unlinking from
-     * itrs without help from the GC) when all indices are negative, or
-     * when hasNext returns false for the first time.  This allows the
-     * iterator to track concurrent updates completely accurately,
-     * except for the corner case of the user calling Iterator.remove()
-     * after hasNext() returned false.  Even in this case, we ensure
-     * that we don't remove the wrong element by keeping track of the
-     * expected element to remove, in lastItem.  Yes, we may fail to
-     * remove lastItem from the queue if it moved due to an interleaved
-     * interior remove while in detached mode.
-     */
+    // 迭代器
     private class Itr implements Iterator<E> {
         /** Index to look for new nextItem; NONE at end */
         private int cursor;
@@ -1392,45 +1206,14 @@ public class ArrayBlockingQueue<E> extends AbstractQueue<E>
 //         }
     }
 
-    /**
-     * Returns a {@link Spliterator} over the elements in this queue.
-     *
-     * <p>The returned spliterator is
-     * <a href="package-summary.html#Weakly"><i>weakly consistent</i></a>.
-     *
-     * <p>The {@code Spliterator} reports {@link Spliterator#CONCURRENT},
-     * {@link Spliterator#ORDERED}, and {@link Spliterator#NONNULL}.
-     *
-     * @implNote
-     * The {@code Spliterator} implements {@code trySplit} to permit limited
-     * parallelism.
-     *
-     * @return a {@code Spliterator} over the elements in this queue
-     * @since 1.8
-     */
     public Spliterator<E> spliterator() {
         return Spliterators.spliterator
             (this, Spliterator.ORDERED | Spliterator.NONNULL |
              Spliterator.CONCURRENT);
     }
 
-    /**
-     * Deserializes this queue and then checks some invariants.
-     *
-     * @param s the input stream
-     * @throws ClassNotFoundException if the class of a serialized object
-     *         could not be found
-     * @throws java.io.InvalidObjectException if invariants are violated
-     * @throws java.io.IOException if an I/O error occurs
-     */
-    private void readObject(java.io.ObjectInputStream s)
-        throws java.io.IOException, ClassNotFoundException {
-
-        // Read in items array and various fields
+    private void readObject(java.io.ObjectInputStream s) throws java.io.IOException, ClassNotFoundException {
         s.defaultReadObject();
-
-        // Check invariants over count and index fields. Note that
-        // if putIndex==takeIndex, count can be either 0 or items.length.
         if (items.length == 0 ||
             takeIndex < 0 || takeIndex >= items.length ||
             putIndex  < 0 || putIndex  >= items.length ||

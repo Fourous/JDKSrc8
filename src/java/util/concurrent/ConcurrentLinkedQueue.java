@@ -1,38 +1,3 @@
-/*
- * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- */
-
-/*
- *
- *
- *
- *
- *
- * Written by Doug Lea and Martin Buchholz with assistance from members of
- * JCP JSR-166 Expert Group and released to the public domain, as explained
- * at http://creativecommons.org/publicdomain/zero/1.0/
- */
-
 package java.util.concurrent;
 
 import java.util.AbstractQueue;
@@ -46,145 +11,17 @@ import java.util.Spliterators;
 import java.util.function.Consumer;
 
 /**
- * An unbounded thread-safe {@linkplain Queue queue} based on linked nodes.
- * This queue orders elements FIFO (first-in-first-out).
- * The <em>head</em> of the queue is that element that has been on the
- * queue the longest time.
- * The <em>tail</em> of the queue is that element that has been on the
- * queue the shortest time. New elements
- * are inserted at the tail of the queue, and the queue retrieval
- * operations obtain elements at the head of the queue.
- * A {@code ConcurrentLinkedQueue} is an appropriate choice when
- * many threads will share access to a common collection.
- * Like most other concurrent collection implementations, this class
- * does not permit the use of {@code null} elements.
- *
- * <p>This implementation employs an efficient <em>non-blocking</em>
- * algorithm based on one described in <a
- * href="http://www.cs.rochester.edu/u/michael/PODC96.html"> Simple,
- * Fast, and Practical Non-Blocking and Blocking Concurrent Queue
- * Algorithms</a> by Maged M. Michael and Michael L. Scott.
- *
- * <p>Iterators are <i>weakly consistent</i>, returning elements
- * reflecting the state of the queue at some point at or since the
- * creation of the iterator.  They do <em>not</em> throw {@link
- * java.util.ConcurrentModificationException}, and may proceed concurrently
- * with other operations.  Elements contained in the queue since the creation
- * of the iterator will be returned exactly once.
- *
- * <p>Beware that, unlike in most collections, the {@code size} method
- * is <em>NOT</em> a constant-time operation. Because of the
- * asynchronous nature of these queues, determining the current number
- * of elements requires a traversal of the elements, and so may report
- * inaccurate results if this collection is modified during traversal.
- * Additionally, the bulk operations {@code addAll},
- * {@code removeAll}, {@code retainAll}, {@code containsAll},
- * {@code equals}, and {@code toArray} are <em>not</em> guaranteed
- * to be performed atomically. For example, an iterator operating
- * concurrently with an {@code addAll} operation might view only some
- * of the added elements.
- *
- * <p>This class and its iterator implement all of the <em>optional</em>
- * methods of the {@link Queue} and {@link Iterator} interfaces.
- *
- * <p>Memory consistency effects: As with other concurrent
- * collections, actions in a thread prior to placing an object into a
- * {@code ConcurrentLinkedQueue}
- * <a href="package-summary.html#MemoryVisibility"><i>happen-before</i></a>
- * actions subsequent to the access or removal of that element from
- * the {@code ConcurrentLinkedQueue} in another thread.
- *
- * <p>This class is a member of the
- * <a href="{@docRoot}/../technotes/guides/collections/index.html">
- * Java Collections Framework</a>.
- *
- * @since 1.5
- * @author Doug Lea
- * @param <E> the type of elements held in this collection
+ * ConcurrentLinkedQueue只实现了Queue接口，并没有实现BlockingQueue接口，所以它不是阻塞队列，也不能用于线程池中，但是它是线程安全的，可用于多线程环境中
  */
-public class ConcurrentLinkedQueue<E> extends AbstractQueue<E>
-        implements Queue<E>, java.io.Serializable {
+public class ConcurrentLinkedQueue<E> extends AbstractQueue<E> implements Queue<E>, java.io.Serializable {
     private static final long serialVersionUID = 196745693267521676L;
 
-    /*
-     * This is a modification of the Michael & Scott algorithm,
-     * adapted for a garbage-collected environment, with support for
-     * interior node deletion (to support remove(Object)).  For
-     * explanation, read the paper.
-     *
-     * Note that like most non-blocking algorithms in this package,
-     * this implementation relies on the fact that in garbage
-     * collected systems, there is no possibility of ABA problems due
-     * to recycled nodes, so there is no need to use "counted
-     * pointers" or related techniques seen in versions used in
-     * non-GC'ed settings.
-     *
-     * The fundamental invariants are:
-     * - There is exactly one (last) Node with a null next reference,
-     *   which is CASed when enqueueing.  This last Node can be
-     *   reached in O(1) time from tail, but tail is merely an
-     *   optimization - it can always be reached in O(N) time from
-     *   head as well.
-     * - The elements contained in the queue are the non-null items in
-     *   Nodes that are reachable from head.  CASing the item
-     *   reference of a Node to null atomically removes it from the
-     *   queue.  Reachability of all elements from head must remain
-     *   true even in the case of concurrent modifications that cause
-     *   head to advance.  A dequeued Node may remain in use
-     *   indefinitely due to creation of an Iterator or simply a
-     *   poll() that has lost its time slice.
-     *
-     * The above might appear to imply that all Nodes are GC-reachable
-     * from a predecessor dequeued Node.  That would cause two problems:
-     * - allow a rogue Iterator to cause unbounded memory retention
-     * - cause cross-generational linking of old Nodes to new Nodes if
-     *   a Node was tenured while live, which generational GCs have a
-     *   hard time dealing with, causing repeated major collections.
-     * However, only non-deleted Nodes need to be reachable from
-     * dequeued Nodes, and reachability does not necessarily have to
-     * be of the kind understood by the GC.  We use the trick of
-     * linking a Node that has just been dequeued to itself.  Such a
-     * self-link implicitly means to advance to head.
-     *
-     * Both head and tail are permitted to lag.  In fact, failing to
-     * update them every time one could is a significant optimization
-     * (fewer CASes). As with LinkedTransferQueue (see the internal
-     * documentation for that class), we use a slack threshold of two;
-     * that is, we update head/tail when the current pointer appears
-     * to be two or more steps away from the first/last node.
-     *
-     * Since head and tail are updated concurrently and independently,
-     * it is possible for tail to lag behind head (why not)?
-     *
-     * CASing a Node's item reference to null atomically removes the
-     * element from the queue.  Iterators skip over Nodes with null
-     * items.  Prior implementations of this class had a race between
-     * poll() and remove(Object) where the same element would appear
-     * to be successfully removed by two concurrent operations.  The
-     * method remove(Object) also lazily unlinks deleted Nodes, but
-     * this is merely an optimization.
-     *
-     * When constructing a Node (before enqueuing it) we avoid paying
-     * for a volatile write to item by using Unsafe.putObject instead
-     * of a normal write.  This allows the cost of enqueue to be
-     * "one-and-a-half" CASes.
-     *
-     * Both head and tail may or may not point to a Node with a
-     * non-null item.  If the queue is empty, all items must of course
-     * be null.  Upon creation, both head and tail refer to a dummy
-     * Node with null item.  Both head and tail are only updated using
-     * CAS, so they never regress, although again this is merely an
-     * optimization.
-     */
-
+    // 链表结构
     private static class Node<E> {
         volatile E item;
         volatile Node<E> next;
 
-        /**
-         * Constructs a new node.  Uses relaxed write because item can
-         * only be seen after publication via casNext.
-         */
+
         Node(E item) {
             UNSAFE.putObject(this, itemOffset, item);
         }
@@ -202,7 +39,6 @@ public class ConcurrentLinkedQueue<E> extends AbstractQueue<E>
         }
 
         // Unsafe mechanics
-
         private static final sun.misc.Unsafe UNSAFE;
         private static final long itemOffset;
         private static final long nextOffset;
@@ -211,60 +47,24 @@ public class ConcurrentLinkedQueue<E> extends AbstractQueue<E>
             try {
                 UNSAFE = sun.misc.Unsafe.getUnsafe();
                 Class<?> k = Node.class;
-                itemOffset = UNSAFE.objectFieldOffset
-                    (k.getDeclaredField("item"));
-                nextOffset = UNSAFE.objectFieldOffset
-                    (k.getDeclaredField("next"));
+                itemOffset = UNSAFE.objectFieldOffset(k.getDeclaredField("item"));
+                nextOffset = UNSAFE.objectFieldOffset(k.getDeclaredField("next"));
             } catch (Exception e) {
                 throw new Error(e);
             }
         }
     }
 
-    /**
-     * A node from which the first live (non-deleted) node (if any)
-     * can be reached in O(1) time.
-     * Invariants:
-     * - all live nodes are reachable from head via succ()
-     * - head != null
-     * - (tmp = head).next != tmp || tmp != head
-     * Non-invariants:
-     * - head.item may or may not be null.
-     * - it is permitted for tail to lag behind head, that is, for tail
-     *   to not be reachable from head!
-     */
+    // 头节点
     private transient volatile Node<E> head;
-
-    /**
-     * A node from which the last node on list (that is, the unique
-     * node with node.next == null) can be reached in O(1) time.
-     * Invariants:
-     * - the last node is always reachable from tail via succ()
-     * - tail != null
-     * Non-invariants:
-     * - tail.item may or may not be null.
-     * - it is permitted for tail to lag behind head, that is, for tail
-     *   to not be reachable from head!
-     * - tail.next may or may not be self-pointing to tail.
-     */
+    // 尾节点
     private transient volatile Node<E> tail;
 
-    /**
-     * Creates a {@code ConcurrentLinkedQueue} that is initially empty.
-     */
+    /** 构造函数 2个**/
     public ConcurrentLinkedQueue() {
         head = tail = new Node<E>(null);
     }
 
-    /**
-     * Creates a {@code ConcurrentLinkedQueue}
-     * initially containing the elements of the given collection,
-     * added in traversal order of the collection's iterator.
-     *
-     * @param c the collection of elements to initially contain
-     * @throws NullPointerException if the specified collection or any
-     *         of its elements are null
-     */
     public ConcurrentLinkedQueue(Collection<? extends E> c) {
         Node<E> h = null, t = null;
         for (E e : c) {
@@ -283,27 +83,14 @@ public class ConcurrentLinkedQueue<E> extends AbstractQueue<E>
         tail = t;
     }
 
-    // Have to override just to update the javadoc
-
-    /**
-     * Inserts the specified element at the tail of this queue.
-     * As the queue is unbounded, this method will never throw
-     * {@link IllegalStateException} or return {@code false}.
-     *
-     * @return {@code true} (as specified by {@link Collection#add})
-     * @throws NullPointerException if the specified element is null
-     */
+    // 不是阻塞队列，只有add offer
     public boolean add(E e) {
         return offer(e);
     }
 
-    /**
-     * Tries to CAS head to p. If successful, repoint old head to itself
-     * as sentinel for succ(), below.
-     */
+    // 更新头节点
     final void updateHead(Node<E> h, Node<E> p) {
-        if (h != p && casHead(h, p))
-            h.lazySetNext(h);
+        if (h != p && casHead(h, p)) h.lazySetNext(h);
     }
 
     /**
@@ -315,65 +102,74 @@ public class ConcurrentLinkedQueue<E> extends AbstractQueue<E>
         Node<E> next = p.next;
         return (p == next) ? head : next;
     }
-
-    /**
-     * Inserts the specified element at the tail of this queue.
-     * As the queue is unbounded, this method will never return {@code false}.
-     *
-     * @return {@code true} (as specified by {@link Queue#offer})
-     * @throws NullPointerException if the specified element is null
-     */
+    // 简单添加节点，没有阻塞过程
+    // 1.定位到链表尾部，尝试把新节点放到后面
+    // 2.如果尾部变化了，则重新获取尾部，再重试
     public boolean offer(E e) {
+        // 不能添加空元素
         checkNotNull(e);
         final Node<E> newNode = new Node<E>(e);
-
+        // 入队到链表尾
         for (Node<E> t = tail, p = t;;) {
             Node<E> q = p.next;
+            // 如果没有next，说明到链表尾部了，就入队
             if (q == null) {
-                // p is last node
+                // CAS更新p的next为新节点
+                // 如果成功了，就返回true 如果不成功就重新取next重新尝试
                 if (p.casNext(null, newNode)) {
-                    // Successful CAS is the linearization point
-                    // for e to become an element of this queue,
-                    // and for newNode to become "live".
-                    if (p != t) // hop two nodes at a time
-                        casTail(t, newNode);  // Failure is OK.
+                    // 如果p不等于t，说明有其它线程先一步更新tail
+                    // 也就不会走到q==null这个分支了
+                    // p取到的可能是t后面的值
+                    // 把tail原子更新为新节点
+                    if (p != t) casTail(t, newNode);
+                    // 返回入队成功
                     return true;
                 }
-                // Lost CAS race to another thread; re-read next
             }
-            else if (p == q)
-                // We have fallen off list.  If tail is unchanged, it
-                // will also be off-list, in which case we need to
-                // jump to head, from which all live nodes are always
-                // reachable.  Else the new tail is a better bet.
-                p = (t != (t = tail)) ? t : head;
-            else
-                // Check for tail updates after two hops.
-                p = (p != t && t != (t = tail)) ? t : q;
+            // 如果p的next等于p，说明p已经被删除了（已经出队了）
+            // 重新设置p的值
+            else if (p == q) p = (t != (t = tail)) ? t : head;
+            // t后面还有值，重新设置p的值
+            else p = (p != t && t != (t = tail)) ? t : q;
         }
     }
 
+    /**
+     * （1）定位到头节点，尝试更新其值为null；
+     * （2）如果成功了，就成功出队；
+     * （3）如果失败或者头节点变化了，就重新寻找头节点，并重试
+     * （4）整个出队过程没有一点阻塞相关的代码，所以出队的时候不会阻塞线程，没找到元素就返回null
+     */
     public E poll() {
         restartFromHead:
         for (;;) {
+            // 尝试弹出链表的头节点
             for (Node<E> h = head, p = h, q;;) {
                 E item = p.item;
-
+                // 如果节点的值不为空，并且将其更新为null成功了
                 if (item != null && p.casItem(item, null)) {
-                    // Successful CAS is the linearization point
-                    // for item to be removed from this queue.
-                    if (p != h) // hop two nodes at a time
-                        updateHead(h, ((q = p.next) != null) ? q : p);
+                    // 如果头节点变了，则不会走到这个分支
+                    // 会先走下面的分支拿到新的头节点
+                    // 这时候p就不等于h了，就更新头节点
+                    // 在updateHead()中会把head更新为新节点
+                    // 并让head的next指向其自己
+                    if (p != h) updateHead(h, ((q = p.next) != null) ? q : p);
+                    // 上面的casItem()成功，就可以返回出队的元素了
                     return item;
                 }
+                // 下面三个分支说明头节点变了
+                // 且p的item肯定为null
                 else if ((q = p.next) == null) {
+                    // 如果p的next为空，说明队列中没有元素了
+                    // 更新h为p，也就是空元素的节点
                     updateHead(h, p);
+                    // 返回null
                     return null;
                 }
-                else if (p == q)
-                    continue restartFromHead;
-                else
-                    p = q;
+                // 如果p等于p的next，说明p已经出队了，重试
+                else if (p == q) continue restartFromHead;
+                // 将p设置为p的next
+                else p = q;
             }
         }
     }
@@ -748,14 +544,6 @@ public class ConcurrentLinkedQueue<E> extends AbstractQueue<E>
         }
     }
 
-    /**
-     * Saves this queue to a stream (that is, serializes it).
-     *
-     * @param s the stream
-     * @throws java.io.IOException if an I/O error occurs
-     * @serialData All of the elements (each an {@code E}) in
-     * the proper order, followed by a null
-     */
     private void writeObject(java.io.ObjectOutputStream s)
         throws java.io.IOException {
 
@@ -773,13 +561,6 @@ public class ConcurrentLinkedQueue<E> extends AbstractQueue<E>
         s.writeObject(null);
     }
 
-    /**
-     * Reconstitutes this queue from a stream (that is, deserializes it).
-     * @param s the stream
-     * @throws ClassNotFoundException if the class of a serialized object
-     *         could not be found
-     * @throws java.io.IOException if an I/O error occurs
-     */
     private void readObject(java.io.ObjectInputStream s)
         throws java.io.IOException, ClassNotFoundException {
         s.defaultReadObject();
@@ -889,35 +670,13 @@ public class ConcurrentLinkedQueue<E> extends AbstractQueue<E>
         }
     }
 
-    /**
-     * Returns a {@link Spliterator} over the elements in this queue.
-     *
-     * <p>The returned spliterator is
-     * <a href="package-summary.html#Weakly"><i>weakly consistent</i></a>.
-     *
-     * <p>The {@code Spliterator} reports {@link Spliterator#CONCURRENT},
-     * {@link Spliterator#ORDERED}, and {@link Spliterator#NONNULL}.
-     *
-     * @implNote
-     * The {@code Spliterator} implements {@code trySplit} to permit limited
-     * parallelism.
-     *
-     * @return a {@code Spliterator} over the elements in this queue
-     * @since 1.8
-     */
     @Override
     public Spliterator<E> spliterator() {
         return new CLQSpliterator<E>(this);
     }
 
-    /**
-     * Throws NullPointerException if argument is null.
-     *
-     * @param v the element
-     */
     private static void checkNotNull(Object v) {
-        if (v == null)
-            throw new NullPointerException();
+        if (v == null) throw new NullPointerException();
     }
 
     private boolean casTail(Node<E> cmp, Node<E> val) {
@@ -928,8 +687,7 @@ public class ConcurrentLinkedQueue<E> extends AbstractQueue<E>
         return UNSAFE.compareAndSwapObject(this, headOffset, cmp, val);
     }
 
-    // Unsafe mechanics
-
+    // Unsafe
     private static final sun.misc.Unsafe UNSAFE;
     private static final long headOffset;
     private static final long tailOffset;
@@ -937,10 +695,8 @@ public class ConcurrentLinkedQueue<E> extends AbstractQueue<E>
         try {
             UNSAFE = sun.misc.Unsafe.getUnsafe();
             Class<?> k = ConcurrentLinkedQueue.class;
-            headOffset = UNSAFE.objectFieldOffset
-                (k.getDeclaredField("head"));
-            tailOffset = UNSAFE.objectFieldOffset
-                (k.getDeclaredField("tail"));
+            headOffset = UNSAFE.objectFieldOffset(k.getDeclaredField("head"));
+            tailOffset = UNSAFE.objectFieldOffset(k.getDeclaredField("tail"));
         } catch (Exception e) {
             throw new Error(e);
         }
