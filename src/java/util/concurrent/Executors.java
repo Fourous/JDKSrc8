@@ -1,38 +1,3 @@
-/*
- * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- */
-
-/*
- *
- *
- *
- *
- *
- * Written by Doug Lea with assistance from members of JCP JSR-166
- * Expert Group and released to the public domain, as explained at
- * http://creativecommons.org/publicdomain/zero/1.0/
- */
-
 package java.util.concurrent;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -45,50 +10,15 @@ import java.security.AccessControlException;
 import sun.security.util.SecurityConstants;
 
 /**
- * Factory and utility methods for {@link Executor}, {@link
- * ExecutorService}, {@link ScheduledExecutorService}, {@link
- * ThreadFactory}, and {@link Callable} classes defined in this
- * package. This class supports the following kinds of methods:
- *
- * <ul>
- *   <li> Methods that create and return an {@link ExecutorService}
- *        set up with commonly useful configuration settings.
- *   <li> Methods that create and return a {@link ScheduledExecutorService}
- *        set up with commonly useful configuration settings.
- *   <li> Methods that create and return a "wrapped" ExecutorService, that
- *        disables reconfiguration by making implementation-specific methods
- *        inaccessible.
- *   <li> Methods that create and return a {@link ThreadFactory}
- *        that sets newly created threads to a known state.
- *   <li> Methods that create and return a {@link Callable}
- *        out of other closure-like forms, so they can be used
- *        in execution methods requiring {@code Callable}.
- * </ul>
- *
- * @since 1.5
- * @author Doug Lea
+ * 线程池工具类，定义了一系列快速实现线程池的方法
  */
 public class Executors {
 
     /**
-     * Creates a thread pool that reuses a fixed number of threads
-     * operating off a shared unbounded queue.  At any point, at most
-     * {@code nThreads} threads will be active processing tasks.
-     * If additional tasks are submitted when all threads are active,
-     * they will wait in the queue until a thread is available.
-     * If any thread terminates due to a failure during execution
-     * prior to shutdown, a new one will take its place if needed to
-     * execute subsequent tasks.  The threads in the pool will exist
-     * until it is explicitly {@link ExecutorService#shutdown shutdown}.
-     *
-     * @param nThreads the number of threads in the pool
-     * @return the newly created thread pool
-     * @throws IllegalArgumentException if {@code nThreads <= 0}
+     * 阻塞队列用的linkedblockingQueue
      */
     public static ExecutorService newFixedThreadPool(int nThreads) {
-        return new ThreadPoolExecutor(nThreads, nThreads,
-                                      0L, TimeUnit.MILLISECONDS,
-                                      new LinkedBlockingQueue<Runnable>());
+        return new ThreadPoolExecutor(nThreads, nThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>());
     }
 
     /**
@@ -107,10 +37,7 @@ public class Executors {
      * @since 1.8
      */
     public static ExecutorService newWorkStealingPool(int parallelism) {
-        return new ForkJoinPool
-            (parallelism,
-             ForkJoinPool.defaultForkJoinWorkerThreadFactory,
-             null, true);
+        return new ForkJoinPool(parallelism, ForkJoinPool.defaultForkJoinWorkerThreadFactory, null, true);
     }
 
     /**
@@ -122,10 +49,7 @@ public class Executors {
      * @since 1.8
      */
     public static ExecutorService newWorkStealingPool() {
-        return new ForkJoinPool
-            (Runtime.getRuntime().availableProcessors(),
-             ForkJoinPool.defaultForkJoinWorkerThreadFactory,
-             null, true);
+        return new ForkJoinPool(Runtime.getRuntime().availableProcessors(), ForkJoinPool.defaultForkJoinWorkerThreadFactory, null, true);
     }
 
     /**
@@ -490,8 +414,7 @@ public class Executors {
      * class loader
      */
     public static <T> Callable<T> privilegedCallableUsingCurrentClassLoader(Callable<T> callable) {
-        if (callable == null)
-            throw new NullPointerException();
+        if (callable == null) throw new NullPointerException();
         return new PrivilegedCallableUsingCurrentClassLoader<T>(callable);
     }
 
@@ -591,7 +514,7 @@ public class Executors {
     }
 
     /**
-     * The default thread factory
+     * 默认线程工厂：这也是线程池默认的线程工厂
      */
     static class DefaultThreadFactory implements ThreadFactory {
         private static final AtomicInteger poolNumber = new AtomicInteger(1);
@@ -601,27 +524,20 @@ public class Executors {
 
         DefaultThreadFactory() {
             SecurityManager s = System.getSecurityManager();
-            group = (s != null) ? s.getThreadGroup() :
-                                  Thread.currentThread().getThreadGroup();
-            namePrefix = "pool-" +
-                          poolNumber.getAndIncrement() +
-                         "-thread-";
+            group = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();
+            namePrefix = "pool-" + poolNumber.getAndIncrement() + "-thread-";
         }
 
         public Thread newThread(Runnable r) {
-            Thread t = new Thread(group, r,
-                                  namePrefix + threadNumber.getAndIncrement(),
-                                  0);
-            if (t.isDaemon())
-                t.setDaemon(false);
-            if (t.getPriority() != Thread.NORM_PRIORITY)
-                t.setPriority(Thread.NORM_PRIORITY);
+            Thread t = new Thread(group, r, namePrefix + threadNumber.getAndIncrement(), 0);
+            if (t.isDaemon()) t.setDaemon(false);
+            if (t.getPriority() != Thread.NORM_PRIORITY) t.setPriority(Thread.NORM_PRIORITY);
             return t;
         }
     }
 
     /**
-     * Thread factory capturing access control context and class loader
+     * 线程工厂捕获访问控制上下文和类加载器
      */
     static class PrivilegedThreadFactory extends DefaultThreadFactory {
         private final AccessControlContext acc;
@@ -648,6 +564,7 @@ public class Executors {
                 public void run() {
                     AccessController.doPrivileged(new PrivilegedAction<Void>() {
                         public Void run() {
+                            // 添加了类加载器
                             Thread.currentThread().setContextClassLoader(ccl);
                             r.run();
                             return null;
@@ -717,9 +634,7 @@ public class Executors {
      * A wrapper class that exposes only the ScheduledExecutorService
      * methods of a ScheduledExecutorService implementation.
      */
-    static class DelegatedScheduledExecutorService
-            extends DelegatedExecutorService
-            implements ScheduledExecutorService {
+    static class DelegatedScheduledExecutorService extends DelegatedExecutorService implements ScheduledExecutorService {
         private final ScheduledExecutorService e;
         DelegatedScheduledExecutorService(ScheduledExecutorService executor) {
             super(executor);
@@ -739,6 +654,8 @@ public class Executors {
         }
     }
 
-    /** Cannot instantiate. */
+    /**
+     * 定位是工具类，是不能被实例化的
+     */
     private Executors() {}
 }
