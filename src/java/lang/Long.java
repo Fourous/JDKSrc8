@@ -30,26 +30,7 @@ import java.math.*;
 
 
 /**
- * The {@code Long} class wraps a value of the primitive type {@code
- * long} in an object. An object of type {@code Long} contains a
- * single field whose type is {@code long}.
  *
- * <p> In addition, this class provides several methods for converting
- * a {@code long} to a {@code String} and a {@code String} to a {@code
- * long}, as well as other constants and methods useful when dealing
- * with a {@code long}.
- *
- * <p>Implementation note: The implementations of the "bit twiddling"
- * methods (such as {@link #highestOneBit(long) highestOneBit} and
- * {@link #numberOfTrailingZeros(long) numberOfTrailingZeros}) are
- * based on material from Henry S. Warren, Jr.'s <i>Hacker's
- * Delight</i>, (Addison Wesley, 2002).
- *
- * @author  Lee Boynton
- * @author  Arthur van Hoff
- * @author  Josh Bloch
- * @author  Joseph D. Darcy
- * @since   JDK1.0
  */
 public final class Long extends Number implements Comparable<Long> {
     /**

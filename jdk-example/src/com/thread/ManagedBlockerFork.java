@@ -7,28 +7,27 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveTask;
 
-// ManagedBlocker的使用
+// ManagedBlocker的使用，计算斐波拉切数列
 public class ManagedBlockerFork {
+    private final BigInteger RESERVED = BigInteger.valueOf(-1000);
+
     public static void main(String[] args) {
         long time = System.currentTimeMillis();
         ManagedBlockerFork fib = new ManagedBlockerFork();
-        int result = fib.f(1_000).bitCount();
+        int result = fib.fib(1_000).bitCount();
         time = System.currentTimeMillis() - time;
         System.out.println("result = " + result);
         System.out.println("test1_000() time = " + time);
     }
 
-    public BigInteger f(int n) {
+    public BigInteger fib(int n) {
         Map<Integer, BigInteger> cache = new ConcurrentHashMap<>();
         cache.put(0, BigInteger.ZERO);
         cache.put(1, BigInteger.ONE);
-        return f(n, cache);
+        return fib(n, cache);
     }
 
-
-    private final BigInteger RESERVED = BigInteger.valueOf(-1000);
-
-    public BigInteger f(int n, Map<Integer, BigInteger> cache) {
+    public BigInteger fib(int n, Map<Integer, BigInteger> cache) {
         BigInteger result = cache.putIfAbsent(n, RESERVED);
         if (result == null) {
             int half = (n + 1) / 2;
@@ -36,15 +35,14 @@ public class ManagedBlockerFork {
                 @Override
                 protected BigInteger
                 compute() {
-                    return f(half - 1, cache);
+                    return fib(half - 1, cache);
                 }
             };
             f0_task.fork();
-            BigInteger f1 = f(half, cache);
+            BigInteger f1 = fib(half, cache);
             BigInteger f0 = f0_task.join();
             long time = n > 10_000 ? System.currentTimeMillis() : 0;
             try {
-
                 if (n % 2 == 1) {
                     result = f0.multiply(f0).add(f1.multiply(f1));
                 } else {
@@ -56,8 +54,7 @@ public class ManagedBlockerFork {
                 }
             } finally {
                 time = n > 10_000 ? System.currentTimeMillis() - time : 0;
-                if (time > 50)
-                    System.out.printf("f(%d) took %d%n", n, time);
+                if (time > 50) System.out.printf("f(%d) took %d%n", n, time);
             }
         } else if (result == RESERVED) {
             try {
@@ -73,6 +70,8 @@ public class ManagedBlockerFork {
         // return f(n - 1).add(f(n - 2));
     }
 
+    // 实现ForkJoin阻塞ManagedBlocker
+    // ForkJoinPool就会启另一个线程来运行任务，以最大化地利用CPU
     private class ReservedFibonacciBlocker implements ForkJoinPool.ManagedBlocker {
         private BigInteger result;
         private final int n;

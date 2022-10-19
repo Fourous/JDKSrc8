@@ -1,28 +1,3 @@
-/*
- * Copyright (c) 1997, 2014, Oracle and/or its affiliates. All rights reserved.
- * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- */
-
 package java.util;
 import java.io.Serializable;
 import java.io.ObjectOutputStream;
@@ -41,65 +16,12 @@ import java.util.stream.StreamSupport;
 import sun.misc.SharedSecrets;
 
 /**
- * This class consists exclusively of static methods that operate on or return
- * collections.  It contains polymorphic algorithms that operate on
- * collections, "wrappers", which return a new collection backed by a
- * specified collection, and a few other odds and ends.
- *
- * <p>The methods of this class all throw a <tt>NullPointerException</tt>
- * if the collections or class objects provided to them are null.
- *
- * <p>The documentation for the polymorphic algorithms contained in this class
- * generally includes a brief description of the <i>implementation</i>.  Such
- * descriptions should be regarded as <i>implementation notes</i>, rather than
- * parts of the <i>specification</i>.  Implementors should feel free to
- * substitute other algorithms, so long as the specification itself is adhered
- * to.  (For example, the algorithm used by <tt>sort</tt> does not have to be
- * a mergesort, but it does have to be <i>stable</i>.)
- *
- * <p>The "destructive" algorithms contained in this class, that is, the
- * algorithms that modify the collection on which they operate, are specified
- * to throw <tt>UnsupportedOperationException</tt> if the collection does not
- * support the appropriate mutation primitive(s), such as the <tt>set</tt>
- * method.  These algorithms may, but are not required to, throw this
- * exception if an invocation would have no effect on the collection.  For
- * example, invoking the <tt>sort</tt> method on an unmodifiable list that is
- * already sorted may or may not throw <tt>UnsupportedOperationException</tt>.
- *
- * <p>This class is a member of the
- * <a href="{@docRoot}/../technotes/guides/collections/index.html">
- * Java Collections Framework</a>.
- *
- * @author  Josh Bloch
- * @author  Neal Gafter
- * @see     Collection
- * @see     Set
- * @see     List
- * @see     Map
- * @since   1.2
+ * Collections是对集合的快速实现方法类，针对集合做一些实际操作，例如排序，转换
  */
-
 public class Collections {
-    // Suppresses default constructor, ensuring non-instantiability.
+    // 工具类，可看到下面很多方法都static的
     private Collections() {
     }
-
-    // Algorithms
-
-    /*
-     * Tuning parameters for algorithms - Many of the List algorithms have
-     * two implementations, one of which is appropriate for RandomAccess
-     * lists, the other for "sequential."  Often, the random access variant
-     * yields better performance on small sequential access lists.  The
-     * tuning parameters below determine the cutoff point for what constitutes
-     * a "small" sequential access list for each algorithm.  The values below
-     * were empirically determined to work well for LinkedList. Hopefully
-     * they should be reasonable for other sequential access List
-     * implementations.  Those doing performance work on this code would
-     * do well to validate the values of these parameters from time to time.
-     * (The first word of each tuning parameter name is the algorithm to which
-     * it applies.)
-     */
     private static final int BINARYSEARCH_THRESHOLD   = 5000;
     private static final int REVERSE_THRESHOLD        =   18;
     private static final int SHUFFLE_THRESHOLD        =    5;

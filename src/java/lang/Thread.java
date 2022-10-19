@@ -147,73 +147,20 @@ public class Thread implements Runnable {
     public static native Thread currentThread();
 
     /**
-     * A hint to the scheduler that the current thread is willing to yield
-     * its current use of a processor. The scheduler is free to ignore this
-     * hint.
-     *
-     * <p> Yield is a heuristic attempt to improve relative progression
-     * between threads that would otherwise over-utilise a CPU. Its use
-     * should be combined with detailed profiling and benchmarking to
-     * ensure that it actually has the desired effect.
-     *
-     * <p> It is rarely appropriate to use this method. It may be useful
-     * for debugging or testing purposes, where it may help to reproduce
-     * bugs due to race conditions. It may also be useful when designing
-     * concurrency control constructs such as the ones in the
-     * {@link java.util.concurrent.locks} package.
+     * 让出CPU调度，可能还是会回到本线程，不能保证能让出，只能让同优先级的线程有机会执行
      */
     public static native void yield();
 
-    /**
-     * Causes the currently executing thread to sleep (temporarily cease
-     * execution) for the specified number of milliseconds, subject to
-     * the precision and accuracy of system timers and schedulers. The thread
-     * does not lose ownership of any monitors.
-     *
-     * @param  millis
-     *         the length of time to sleep in milliseconds
-     *
-     * @throws  IllegalArgumentException
-     *          if the value of {@code millis} is negative
-     *
-     * @throws  InterruptedException
-     *          if any thread has interrupted the current thread. The
-     *          <i>interrupted status</i> of the current thread is
-     *          cleared when this exception is thrown.
-     */
+    // 必须带时间，让出CPU资源，但是不会释放锁，这才是重点
     public static native void sleep(long millis) throws InterruptedException;
 
-    /**
-     * Causes the currently executing thread to sleep (temporarily cease
-     * execution) for the specified number of milliseconds plus the specified
-     * number of nanoseconds, subject to the precision and accuracy of system
-     * timers and schedulers. The thread does not lose ownership of any
-     * monitors.
-     *
-     * @param  millis
-     *         the length of time to sleep in milliseconds
-     *
-     * @param  nanos
-     *         {@code 0-999999} additional nanoseconds to sleep
-     *
-     * @throws  IllegalArgumentException
-     *          if the value of {@code millis} is negative, or the value of
-     *          {@code nanos} is not in the range {@code 0-999999}
-     *
-     * @throws  InterruptedException
-     *          if any thread has interrupted the current thread. The
-     *          <i>interrupted status</i> of the current thread is
-     *          cleared when this exception is thrown.
-     */
-    public static void sleep(long millis, int nanos)
-    throws InterruptedException {
+    public static void sleep(long millis, int nanos) throws InterruptedException {
         if (millis < 0) {
             throw new IllegalArgumentException("timeout value is negative");
         }
 
         if (nanos < 0 || nanos > 999999) {
-            throw new IllegalArgumentException(
-                                "nanosecond timeout value out of range");
+            throw new IllegalArgumentException("nanosecond timeout value out of range");
         }
 
         if (nanos >= 500000 || (nanos != 0 && millis == 0)) {

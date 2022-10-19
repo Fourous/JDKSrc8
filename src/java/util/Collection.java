@@ -4,6 +4,10 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+/**
+ * Collection继承了迭代器
+ * 定义了size contain 增删改，交并集合操作，以及有关流的一下操作
+ */
 public interface Collection<E> extends Iterable<E> {
     // Query Operations
 

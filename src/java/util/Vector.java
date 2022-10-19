@@ -1,28 +1,3 @@
-/*
- * Copyright (c) 1994, 2017, Oracle and/or its affiliates. All rights reserved.
- * ORACLE PROPRIETARY/CONFIDENTIAL. Use is subject to license terms.
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- *
- */
-
 package java.util;
 
 import java.io.IOException;
@@ -33,60 +8,10 @@ import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 /**
- * The {@code Vector} class implements a growable array of
- * objects. Like an array, it contains components that can be
- * accessed using an integer index. However, the size of a
- * {@code Vector} can grow or shrink as needed to accommodate
- * adding and removing items after the {@code Vector} has been created.
- *
- * <p>Each vector tries to optimize storage management by maintaining a
- * {@code capacity} and a {@code capacityIncrement}. The
- * {@code capacity} is always at least as large as the vector
- * size; it is usually larger because as components are added to the
- * vector, the vector's storage increases in chunks the size of
- * {@code capacityIncrement}. An application can increase the
- * capacity of a vector before inserting a large number of
- * components; this reduces the amount of incremental reallocation.
- *
- * <p><a name="fail-fast">
- * The iterators returned by this class's {@link #iterator() iterator} and
- * {@link #listIterator(int) listIterator} methods are <em>fail-fast</em></a>:
- * if the vector is structurally modified at any time after the iterator is
- * created, in any way except through the iterator's own
- * {@link ListIterator#remove() remove} or
- * {@link ListIterator#add(Object) add} methods, the iterator will throw a
- * {@link ConcurrentModificationException}.  Thus, in the face of
- * concurrent modification, the iterator fails quickly and cleanly, rather
- * than risking arbitrary, non-deterministic behavior at an undetermined
- * time in the future.  The {@link Enumeration Enumerations} returned by
- * the {@link #elements() elements} method are <em>not</em> fail-fast.
- *
- * <p>Note that the fail-fast behavior of an iterator cannot be guaranteed
- * as it is, generally speaking, impossible to make any hard guarantees in the
- * presence of unsynchronized concurrent modification.  Fail-fast iterators
- * throw {@code ConcurrentModificationException} on a best-effort basis.
- * Therefore, it would be wrong to write a program that depended on this
- * exception for its correctness:  <i>the fail-fast behavior of iterators
- * should be used only to detect bugs.</i>
- *
- * <p>As of the Java 2 platform v1.2, this class was retrofitted to
- * implement the {@link List} interface, making it a member of the
- * <a href="{@docRoot}/../technotes/guides/collections/index.html">
- * Java Collections Framework</a>.  Unlike the new collection
- * implementations, {@code Vector} is synchronized.  If a thread-safe
- * implementation is not needed, it is recommended to use {@link
- * ArrayList} in place of {@code Vector}.
- *
- * @author  Lee Boynton
- * @author  Jonathan Payne
- * @see Collection
- * @see LinkedList
- * @since   JDK1.0
+ * Vector是线程安全的，而且实现方式也很粗暴，直接加synchronized，扩容也是直接翻倍扩容
+ * 所以如果要线程安全，对比也是CopyOnWriteArrayList ，COWA 实现了读写分离用的是ReentrantLock
  */
-public class Vector<E>
-    extends AbstractList<E>
-    implements List<E>, RandomAccess, Cloneable, java.io.Serializable
-{
+public class Vector<E> extends AbstractList<E> implements List<E>, RandomAccess, Cloneable, java.io.Serializable {
     /**
      * The array buffer into which the components of the vector are
      * stored. The capacity of the vector is the length of this array buffer,
@@ -132,9 +57,7 @@ public class Vector<E>
      */
     public Vector(int initialCapacity, int capacityIncrement) {
         super();
-        if (initialCapacity < 0)
-            throw new IllegalArgumentException("Illegal Capacity: "+
-                                               initialCapacity);
+        if (initialCapacity < 0) throw new IllegalArgumentException("Illegal Capacity: "+ initialCapacity);
         this.elementData = new Object[initialCapacity];
         this.capacityIncrement = capacityIncrement;
     }
@@ -259,24 +182,19 @@ public class Vector<E>
      */
     private static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
 
+    // 扩容是直接翻倍
     private void grow(int minCapacity) {
         // overflow-conscious code
         int oldCapacity = elementData.length;
-        int newCapacity = oldCapacity + ((capacityIncrement > 0) ?
-                                         capacityIncrement : oldCapacity);
-        if (newCapacity - minCapacity < 0)
-            newCapacity = minCapacity;
-        if (newCapacity - MAX_ARRAY_SIZE > 0)
-            newCapacity = hugeCapacity(minCapacity);
+        int newCapacity = oldCapacity + ((capacityIncrement > 0) ? capacityIncrement : oldCapacity);
+        if (newCapacity - minCapacity < 0) newCapacity = minCapacity;
+        if (newCapacity - MAX_ARRAY_SIZE > 0) newCapacity = hugeCapacity(minCapacity);
         elementData = Arrays.copyOf(elementData, newCapacity);
     }
 
     private static int hugeCapacity(int minCapacity) {
-        if (minCapacity < 0) // overflow
-            throw new OutOfMemoryError();
-        return (minCapacity > MAX_ARRAY_SIZE) ?
-            Integer.MAX_VALUE :
-            MAX_ARRAY_SIZE;
+        if (minCapacity < 0) throw new OutOfMemoryError();
+        return (minCapacity > MAX_ARRAY_SIZE) ? Integer.MAX_VALUE : MAX_ARRAY_SIZE;
     }
 
     /**
@@ -600,8 +518,7 @@ public class Vector<E>
     public synchronized void insertElementAt(E obj, int index) {
         modCount++;
         if (index > elementCount) {
-            throw new ArrayIndexOutOfBoundsException(index
-                                                     + " > " + elementCount);
+            throw new ArrayIndexOutOfBoundsException(index + " > " + elementCount);
         }
         ensureCapacityHelper(elementCount + 1);
         System.arraycopy(elementData, index, elementData, index + 1, elementCount - index);
@@ -733,7 +650,7 @@ public class Vector<E>
     }
 
     // Positional Access Operations
-
+    // 直接返回
     @SuppressWarnings("unchecked")
     E elementData(int index) {
         return (E) elementData[index];
@@ -782,7 +699,7 @@ public class Vector<E>
      * @return {@code true} (as specified by {@link Collection#add})
      * @since 1.2
      */
-    public synchronized boolean add(E e) {
+    public synchronized boolean add( E e) {
         modCount++;
         ensureCapacityHelper(elementCount + 1);
         elementData[elementCount++] = e;

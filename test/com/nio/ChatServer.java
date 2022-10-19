@@ -15,7 +15,6 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 使用JDK原生NIO实现的Chat逻辑，要掌握原生实现才能看懂Netty包装逻辑
- *
  */
 public class ChatServer {
     public static void main(String[] args) throws IOException {
